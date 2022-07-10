@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+  daunrodo:
+    container_name: "daunrodo"
+    build: .
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - DAUNRODO_LOG_LEVEL=${DAUNRODO_LOG_LEVEL}
+      - DAUNRODO_HTTP_PORT=${DAUNRODO_HTTP_PORT}
+      - DAUNRODO_HTTP_PROXY=${DAUNRODO_HTTP_PROXY}

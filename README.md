@@ -1,12 +1,19 @@
-# 🔗 daunrōdo - self-hosted media downloader
+# 🔗 daunrōdo - self-hosted `yt-dlp` http server
  > Daunrōdā, ダウンローダー - means <i>downloader</i> in Japanese
+
+Simple HTTP server that invokes [go-ytdlp](https://github.com/lrstanley/go-ytdlp). Has autoupdates, queue, progress, cache, failover capabilities. No dependencies.
 
 Self-hosted web daemon solution tool to download original media files by extracting their direct URLs from various internet resources and social networks using plugable crawlers via API calls. More features and resources are coming by as I add them. Project started as a personal tool mainly, decided to make it public and is in early alpha stage.
 
 Stop screenshoting, just ```daunrodo``` it!
 
 # 🤩 Features
-- 💪 **Plugin based**. Fork and easily add your own crawler through Go ```interface{}```
+- [ ] 🎨 **Media** supports albums, images, videos, audios, playlists
+- [ ] 🔄 **Autoupdates** `yt-dlp`, `ffmpeg` binaries installation and updates are managed automatically
+- [x] 🚦 **Queue**. Requested downloads are enqueued, repeated are cached, progress (%, ETA) is tracked
+- [ ] 🔀 **Failover** Failed downloads are tried again with native downloader or other tools like `gallery-dl`
+- [ ] 💪 **Persistent**. Cache is a simple `.json` with files stored locally
+
 
 # 📦 Installation
 Best used with Docker and Traefik
@@ -18,6 +25,11 @@ sudo docker-compose logs -f
 
 # 🔬 Basic usage 
 Just add your link to the daunrodo as a path. Example: ```instagram.com/p/CfwlfpcL-li/``` -> ```daunrodo.yourdomain.org/instagram.com/p/CfwlfpcL-li/```
+
+
+# Motivation?
+`yt-dlp` uses terminal UI so using on phones is hard. But iOS Shortcuts can invoke custom user scripts that supports HTTP requests. Just share social media post from your phone, tap daunrodo shortcut and you get back original `.mp4` video file that can be saved into gallery. No more screen recordings 🖤
+I also use it as an internal microservice for my other projects to make API calls, like `blossom`, telegram bots, etc to simplify downloads logic.
 
 # 🤝 Contributing
 Contributions, issues and feature requests are welcome! 👍 <br>
@@ -38,4 +50,4 @@ Give a ⭐️ if this project helped you!
 - Swagger
 
 # 📑 License 
-(c) 2022 Ivan Smyshlyaev. [MIT License](https://tldrlegal.com/license/mit-license)
+(c) 2024 Ivan Smyshlyaev. [MIT License](https://tldrlegal.com/license/mit-license)

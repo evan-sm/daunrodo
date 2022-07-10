@@ -1,0 +1,6 @@
+.vscode/
+.env
+./daunrodo
+__debug_bin*
+cookies.txt
+.DS_Store

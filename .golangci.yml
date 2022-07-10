@@ -1,0 +1,28 @@
+# See the dedicated "version" documentation section.
+version: "2"
+linters:
+  # See the dedicated "linters" documentation section.
+  default: all
+  enable:
+    # - regexp
+    - revive
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  # See the dedicated "formatters" documentation section.
+  # option: value
+# issues:
+#   # See the dedicated "issues" documentation section.
+#   # option: value
+# # Output configuration options.
+# output:
+#   # See the dedicated "output" documentation section.
+#   # option: value
+# # Options for analysis running.
+# run:
+#   # See the dedicated "run" documentation section.
+#   # option: value
+# severity:
+#   # See the dedicated "severity" documentation section.
+#   # option: value
