@@ -1,3 +1,4 @@
+// entry point of the application
 package main
 
 import (
@@ -6,12 +7,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"daunrodo/internal/config"
 	"daunrodo/internal/downloader"
 	httprouter "daunrodo/internal/infrastructure/delivery/http"
 	"daunrodo/internal/service"
+	"daunrodo/internal/storage"
 	httpserver "daunrodo/pkg/http/server"
 	"daunrodo/pkg/logger"
 
@@ -19,15 +20,19 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	cfg, err := config.New()
 	if err != nil {
 		slog.Error("config new", slog.Any("error", err))
+		stop()
 		os.Exit(1)
 	}
 
 	log, err := logger.New(&logger.Options{
 		AddSource: true,
-		Level:     cfg.LogLevel,
+		Level:     cfg.App.LogLevel,
 	})
 	if err != nil {
 		slog.Error("logger new", slog.Any("error", err))
@@ -35,25 +40,26 @@ func main() {
 	}
 
 	downloader := downloader.NewYTdlp(log, cfg)
+	storer := storage.New(ctx, log, cfg)
 
 	// Service
-	svc := service.New(cfg, log, downloader)
+	svc := service.New(cfg, log, downloader, storer)
 
 	// HTTP Server
-	router := httprouter.New(log, svc)
+	router := httprouter.New(log, cfg, svc, storer)
 
 	httpSrv := httpserver.New(router, httpserver.Options{
-		Addr:            cfg.App.HttpPort,
-		ShutdownTimeout: time.Second * 10,
+		Addr:            cfg.HTTP.Port,
+		ShutdownTimeout: cfg.HTTP.ShutdownTimeout,
 	})
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+	log.InfoContext(ctx, "checking if yt-dlp, ffmpeg, ffprobe isn't installed yet. it may take some time...")
 	// If yt-dlp, ffmpeg, ffprobe isn't installed yet, download and cache it for further use.
 	ytdlp.MustInstallAll(ctx)
 
 	svc.Start(ctx)
+
+	log.InfoContext(ctx, "daunrodo started", slog.String("port", cfg.HTTP.Port))
 
 	// Waiting for shutdown signal
 	<-ctx.Done()

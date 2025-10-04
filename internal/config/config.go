@@ -1,77 +1,98 @@
+// Package config handles application configuration loading and management.
 package config
 
 import (
-	"daunrodo/internal/consts"
+	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 )
 
-type (
-	Config struct {
-		HTTP
-		App
-	}
-
-	App struct {
-		LogLevel string `env:"DAUNRODO_APP_LOG_LEVEL" envDefault:"info"`
-		HttpPort string `env:"DAUNRODO_APP_HTTP_PORT" envDefault:"8080"`
-
-		Job Job
-		Dir Dir
-	}
-
-	Job struct {
-		Workers    int           `env:"DAUNRODO_APP_JOB_WORKERS" envDefault:"2"`
-		StorageTTL time.Duration `env:"DAUNRODO_APP_JOB_STORAGE_TTL" envDefault:"168h"`
-		Timeout    time.Duration `env:"DAUNRODO_APP_JOB_TIMEOUT" envDefault:"5m"`
-		QueueSize  int           `env:"DAUNRODO_APP_JOB_QUEUE_SIZE" envDefault:"100"`
-	}
-
-	HTTP struct {
-		HandlerTimeout time.Duration `env:"DAUNRODO_HTTP_HANDLER_TIMEOUT" envDefault:"20s"`
-	}
-)
-
-type Dir struct {
-	Downloads        string `env:"DAUNRODO_DIR_DOWNLOAD" envDefault:"./data/downloads"`                                    // downloads stored here
-	Cache            string `env:"DAUNRODO_DIR_CACHE" envDefault:"./data/cache"`                                           // yt-dlp cache (meta, sigs)
-	Cookies          string `env:"DAUNRODO_DIR_COOKIES" envDefault:""`                                                     // must contain cookies.txt file | see: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
-	FilenameTemplate string `env:"DAUNRODO_DIR_FILENAME_TEMPLATE" envDefault:"%(extractor)s - %(title)s [%(id)s].%(ext)s"` // see: https://github.com/yt-dlp/yt-dlp/blob/2025.09.05/README.md#output-template
+// Config holds the application configuration.
+type Config struct {
+	HTTP    HTTP
+	App     App
+	Job     Job
+	Dir     Dir
+	Storage Storage
 }
 
-func (c *Dir) SetAbsPaths() (err error) {
+// App holds application-wide configuration.
+type App struct {
+	LogLevel string `env:"DAUNRODO_APP_LOG_LEVEL" envDefault:"info"`
+}
+
+// Job holds job processing configuration.
+type Job struct {
+	Workers   int           `env:"DAUNRODO_APP_JOB_WORKERS"    envDefault:"2"`
+	Timeout   time.Duration `env:"DAUNRODO_APP_JOB_TIMEOUT"    envDefault:"5m"`
+	QueueSize int           `env:"DAUNRODO_APP_JOB_QUEUE_SIZE" envDefault:"100"`
+}
+
+// Storage holds storage configuration.
+type Storage struct {
+	TTL             time.Duration `env:"DAUNRODO_APP_STORAGE_TTL"              envDefault:"168h"`
+	CleanupInterval time.Duration `env:"DAUNRODO_APP_STORAGE_CLEANUP_INTERVAL" envDefault:"1h"`
+}
+
+// HTTP holds HTTP server configuration.
+type HTTP struct {
+	Port            string        `env:"DAUNRODO_HTTP_PORT"             envDefault:":8080"`
+	HandlerTimeout  time.Duration `env:"DAUNRODO_HTTP_HANDLER_TIMEOUT"  envDefault:"20s"`
+	DownloadTimeout time.Duration `env:"DAUNRODO_HTTP_DOWNLOAD_TIMEOUT" envDefault:"30m"`
+	ShutdownTimeout time.Duration `env:"DAUNRODO_HTTP_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+}
+
+// Dir holds directory paths for downloads, cache, and cookie file.
+type Dir struct {
+	Downloads string `env:"DAUNRODO_DIR_DOWNLOAD"          envDefault:"./data/downloads"` // downloads stored here
+	Cache     string `env:"DAUNRODO_DIR_CACHE"             envDefault:"./data/cache"`     // yt-dlp cache (meta, sigs)
+
+	// must contain cookies.txt file
+	// see: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
+	CookieFile string `env:"DAUNRODO_DIR_COOKIE_FILE" envDefault:""`
+
+	// see: https://github.com/yt-dlp/yt-dlp/blob/2025.09.05/README.md#output-template
+	FilenameTemplate string `env:"DAUNRODO_DIR_FILENAME_TEMPLATE" envDefault:"%(extractor)s - %(title)s [%(id)s].%(ext)s"`
+}
+
+// SetAbsPaths converts all directory paths to absolute paths.
+func (c *Dir) SetAbsPaths() error {
+	var err error
 	if c.Downloads, err = filepath.Abs(c.Downloads); err != nil {
-		return err
-	}
-	if c.Cache, err = filepath.Abs(c.Cache); err != nil {
-		return err
+		return fmt.Errorf("downloads: %w", err)
 	}
 
-	if c.Cookies != "" {
-		if c.Cookies, err = filepath.Abs(filepath.Join(c.Cookies, consts.CookiesFile)); err != nil {
-			return err
+	if c.Cache, err = filepath.Abs(c.Cache); err != nil {
+		return fmt.Errorf("cache: %w", err)
+	}
+
+	if c.CookieFile != "" {
+		if c.CookieFile, err = filepath.Abs(c.CookieFile); err != nil {
+			return fmt.Errorf("cookie file: %w", err)
 		}
 	}
 
 	if c.FilenameTemplate, err = filepath.Abs(filepath.Join(c.Downloads, c.FilenameTemplate)); err != nil {
-		return err
+		return fmt.Errorf("filename template: %w", err)
 	}
 
-	return err
+	return nil
 }
 
+// New loads configuration from environment variables.
 func New() (*Config, error) {
 	cfg := &Config{}
+
 	err := env.Parse(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse env: %w", err)
 	}
 
-	err = cfg.App.Dir.SetAbsPaths()
+	err = cfg.Dir.SetAbsPaths()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("set absolute paths: %w", err)
 	}
 
 	return cfg, nil

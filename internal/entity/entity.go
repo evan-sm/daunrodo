@@ -1,3 +1,4 @@
+// Package entity defines the core entities used in the application.
 package entity
 
 import (
@@ -5,20 +6,23 @@ import (
 	"time"
 )
 
-// JobStatus represents the status of a download job
+// JobStatus represents the status of a download job.
 type JobStatus string
 
 const (
-	JobStatusStarting       JobStatus = "starting"
-	JobStatusDownloading    JobStatus = "downloading"
-	JobStatusPostProcessing JobStatus = "post_processing"
-	JobStatusError          JobStatus = "error"
-	JobStatusFinished       JobStatus = "finished"
+	// JobStatusStarting indicates that the job is accepted and is about to start.
+	JobStatusStarting JobStatus = "starting"
+	// JobStatusDownloading indicates that the job is in progress.
+	JobStatusDownloading JobStatus = "downloading"
+	// JobStatusError indicates that the job has encountered an error.
+	JobStatusError JobStatus = "error"
+	// JobStatusFinished indicates that the job has finished successfully.
+	JobStatusFinished JobStatus = "finished"
 )
 
-// Job represents a download job
+// Job represents a download job.
 type Job struct {
-	ID           string        `json:"id"`
+	UUID         string        `json:"uuid"`
 	URL          string        `json:"url"`
 	Preset       string        `json:"preset"`
 	Status       JobStatus     `json:"status"`
@@ -31,9 +35,10 @@ type Job struct {
 	ExpiresAt    time.Time     `json:"expiresAt"`
 }
 
+// LogValue implements the slog.LogValuer interface for structured logging.
 func (j Job) LogValue() slog.Value {
 	return slog.GroupValue(
-		slog.String("id", j.ID),
+		slog.String("uuid", j.UUID),
 		slog.String("url", j.URL),
 		slog.String("status", string(j.Status)),
 		slog.Int("progress", j.Progress),
@@ -41,7 +46,7 @@ func (j Job) LogValue() slog.Value {
 	)
 }
 
-// File represents a downloaded file
+// File represents a downloaded file.
 type File struct {
 	ID       string `json:"id"`
 	URL      string `json:"url"`
@@ -54,7 +59,7 @@ type File struct {
 	Height   int    `json:"height"`
 }
 
-// Publication represents a social media publication/post
+// Publication represents a social media publication/post.
 type Publication struct {
 	UUID         string `json:"uuid"`
 	ID           string `json:"id"`
@@ -69,10 +74,34 @@ type Publication struct {
 	LikeCount    int    `json:"likeCount"`
 	ThumbnailURL string `json:"thumbnailUrl"`
 	// Files        []File `json:"files"` // Associated files
+	FileSize int64  `json:"fileSize"`
 	Duration int    `json:"duration"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
 	Filename string `json:"filename"`
 	// CreatedAt   time.Time `json:"createdAt"`
 	// UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// LogValue implements the slog.LogValuer interface for structured logging.
+func (p Publication) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("uuid", p.UUID),
+		slog.String("id", p.ID),
+		slog.String("type", p.Type),
+		slog.String("platform", p.Platform),
+		slog.String("channel", p.Channel),
+		slog.String("webpage_url", p.WebpageURL),
+		slog.String("title", p.Title),
+		slog.String("description", p.Description),
+		slog.String("author", p.Author),
+		slog.Int("viewCount", p.ViewCount),
+		slog.Int("likeCount", p.LikeCount),
+		slog.String("thumbnail_url", p.ThumbnailURL),
+		slog.Int64("file_size", p.FileSize),
+		slog.Int("duration", p.Duration),
+		slog.Int("width", p.Width),
+		slog.Int("height", p.Height),
+		slog.String("filename", p.Filename),
+	)
 }

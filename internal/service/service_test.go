@@ -1,4 +1,4 @@
-package service
+package service_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"daunrodo/internal/downloader"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/service"
+	"daunrodo/internal/storage"
 	"errors"
 	"log/slog"
 	"os"
@@ -26,10 +28,13 @@ const (
 	testConfigPresetCustom   = "custom"
 )
 
-func NewTestService(cfg *config.Config) *job {
+func NewTestService(t *testing.T, cfg *config.Config) *service.Job {
+	t.Helper()
+
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	downloader := downloader.NewMock(log)
-	svc := New(cfg, log, downloader).(*job)
+	storage := storage.New(t.Context(), log, NewTestCfg(testConfigPresetDefault))
+	svc := service.New(cfg, log, downloader, storage).(*service.Job)
 
 	return svc
 }
@@ -38,24 +43,26 @@ func NewTestCfg(preset string) *config.Config {
 	switch preset {
 	case "empty", "default":
 		cfg, _ := config.New()
+
 		return cfg
 	case "negative", "wrong":
 		cfg, _ := config.New()
-		cfg.App.Job.Workers = -1
-		cfg.App.Job.StorageTTL = -1
-		cfg.App.Job.Timeout = -1
+		cfg.Job.Workers = -1
+		cfg.Storage.TTL = -1
+		cfg.Job.Timeout = -1
 
 		return cfg
 	case "custom":
 		cfg, _ := config.New()
-		cfg.App.Job.Workers = 2
-		cfg.App.Job.StorageTTL = 2 * time.Hour
-		cfg.App.Job.Timeout = 5 * time.Minute
-		cfg.App.Job.QueueSize = 100
+		cfg.Job.Workers = 2
+		cfg.Storage.TTL = 2 * time.Hour
+		cfg.Job.Timeout = 5 * time.Minute
+		cfg.Job.QueueSize = 100
 
 		return cfg
 	default:
 		cfg, _ := config.New()
+
 		return cfg
 	}
 }
@@ -80,13 +87,14 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewTestService(tt.cfg)
+			svc := NewTestService(t, tt.cfg)
 
-			if svc.cfg.App.Job.Workers != tt.cfg.Job.Workers {
-				t.Errorf("expected %d workers, got %d", tt.cfg.Job.Workers, svc.cfg.App.Job.Workers)
+			if svc.Cfg.Job.Workers != tt.cfg.Job.Workers {
+				t.Errorf("expected %d workers, got %d", tt.cfg.Job.Workers, svc.Cfg.Job.Workers)
 			}
-			if cap(svc.jobQueue) != tt.cfg.App.Job.QueueSize {
-				t.Errorf("expected %d queue size, got %d", tt.cfg.App.Job.QueueSize, cap(svc.jobQueue))
+
+			if cap(svc.JobQueue) != tt.cfg.Job.QueueSize {
+				t.Errorf("expected %d queue size, got %d", tt.cfg.Job.QueueSize, cap(svc.JobQueue))
 			}
 		})
 	}
@@ -116,7 +124,7 @@ func TestStartAndEnqueue(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				cfg := NewTestCfg(testConfigPresetCustom)
-				svc := NewTestService(cfg)
+				svc := NewTestService(t, cfg)
 
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
@@ -136,13 +144,15 @@ func TestStartAndEnqueue(t *testing.T) {
 						t.Errorf("expected ErrJobAlreadyExists, got: %v", err)
 					}
 				}
+
 				if !tc.expectError {
 					if err != nil {
 						t.Errorf("failed to enqueue job: %v", err)
 					}
 				}
 
-				if job := svc.GetByURLAndPreset(ctx, testURL, testPresetMP4); job != nil && job.Status != entity.JobStatusStarting {
+				job := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+				if job != nil && job.Status != entity.JobStatusStarting {
 					t.Errorf("expected job to be started")
 				}
 
@@ -150,20 +160,17 @@ func TestStartAndEnqueue(t *testing.T) {
 				synctest.Wait()
 
 				_, err = svc.Enqueue(ctx, testURL, testPresetMP4)
-				if err != errs.ErrServiceClosed {
+				if !errors.Is(err, errs.ErrServiceClosed) {
 					t.Errorf("expected: %v got: %v", errs.ErrServiceClosed, err)
 				}
 			})
 		})
-
 	}
-
 }
 
 func TestWorker(t *testing.T) {
 	tests := []struct {
 		name           string
-		step           time.Duration
 		timeout        time.Duration
 		expectDeadline bool
 		expectStatus   entity.JobStatus
@@ -188,7 +195,7 @@ func TestWorker(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				cfg := NewTestCfg(testConfigPresetCustom)
-				svc := NewTestService(cfg)
+				svc := NewTestService(t, cfg)
 
 				ctx, cancel := context.WithTimeout(t.Context(), tc.timeout)
 				defer cancel()
@@ -197,55 +204,158 @@ func TestWorker(t *testing.T) {
 
 				job, err := svc.Enqueue(ctx, testURL, testPresetMP4)
 				if err != nil {
-					t.Errorf("failed to enqueue job: %v", err)
+					t.Fatalf("failed to enqueue job: %v", err)
 				}
 
-				switch job.Status {
-				case entity.JobStatusStarting, entity.JobStatusDownloading:
-					break
-				default:
-					t.Errorf("unexpected job status: %v", job.Status)
-				}
+				validateInitialJobStatus(t, job)
 
 				<-ctx.Done()
 				synctest.Wait()
 
-				ctxErr := ctx.Err()
-				if tc.expectDeadline {
-					job = svc.GetByURLAndPreset(ctx, testURL, testPresetMP4)
-					if job == nil {
-						t.Errorf("failed to get job: %v", err)
-					}
-					if job != nil {
-						if job.Status != tc.expectStatus {
-							t.Errorf("expected job to be failed")
-						}
-						if job.Progress != tc.expectProgress {
-							t.Errorf("expected job progress to be %d, got: %d", tc.expectProgress, job.Progress)
-						}
-						if ctxErr != context.DeadlineExceeded {
-							t.Errorf("expected context.DeadlineExceeded, got: %v", ctxErr)
-						}
-					}
+				job = svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+				if job == nil {
+					t.Fatalf("failed to get job")
 				}
-				if !tc.expectDeadline {
-					job := svc.GetByURLAndPreset(ctx, testURL, testPresetMP4)
-					if job == nil {
-						t.Errorf("failed to get job: %v", err)
-					}
-					if job != nil {
-						if job.Status != tc.expectStatus {
-							t.Errorf("expected job to be finished")
-						}
-					}
+
+				if tc.expectDeadline {
+					assertJobDeadline(t, job, tc.expectStatus, tc.expectProgress, ctx.Err())
+				} else {
+					assertJobFinished(t, job, tc.expectStatus)
 				}
 			})
 		})
 	}
 }
 
-func TestGetJob(t *testing.T) {
-	svc := NewTestService(NewTestCfg(testConfigPresetDefault))
+func validateInitialJobStatus(t *testing.T, job *entity.Job) {
+	t.Helper()
+
+	switch job.Status {
+	case entity.JobStatusStarting, entity.JobStatusDownloading:
+		return
+	default:
+		t.Errorf("unexpected job status immediately after enqueue: %v", job.Status)
+	}
+}
+
+func assertJobDeadline(t *testing.T, job *entity.Job,
+	expectedStatus entity.JobStatus,
+	expectedProgress int,
+	ctxErr error) {
+	t.Helper()
+
+	if job.Status != expectedStatus {
+		t.Errorf("expected job to be failed, got %v", job.Status)
+	}
+
+	if job.Progress != expectedProgress {
+		t.Errorf("expected job progress %d, got %d", expectedProgress, job.Progress)
+	}
+
+	if !errors.Is(ctxErr, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got: %v", ctxErr)
+	}
+}
+
+func assertJobFinished(t *testing.T, job *entity.Job, expectedStatus entity.JobStatus) {
+	t.Helper()
+
+	if job.Status != expectedStatus {
+		t.Errorf("expected job to be finished, got %v", job.Status)
+	}
+}
+
+// func TestWorker(t *testing.T) {
+// 	tests := []struct {
+// 		name           string
+// 		step           time.Duration
+// 		timeout        time.Duration
+// 		expectDeadline bool
+// 		expectStatus   entity.JobStatus
+// 		expectProgress int
+// 	}{
+// 		{
+// 			name:           "should finish in time",
+// 			timeout:        2 * time.Second,
+// 			expectDeadline: false,
+// 			expectStatus:   entity.JobStatusFinished,
+// 		},
+// 		{
+// 			name:           "should timeout",
+// 			timeout:        500 * time.Millisecond,
+// 			expectDeadline: true,
+// 			expectStatus:   entity.JobStatusError,
+// 			expectProgress: 40,
+// 		},
+// 	}
+
+// 	for _, tc := range tests {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			synctest.Test(t, func(t *testing.T) {
+// 				cfg := NewTestCfg(testConfigPresetCustom)
+// 				svc := NewTestService(t, cfg)
+
+// 				ctx, cancel := context.WithTimeout(t.Context(), tc.timeout)
+// 				defer cancel()
+
+// 				svc.Start(ctx)
+
+// 				job, err := svc.Enqueue(ctx, testURL, testPresetMP4)
+// 				if err != nil {
+// 					t.Errorf("failed to enqueue job: %v", err)
+// 				}
+
+// 				switch job.Status {
+// 				case entity.JobStatusStarting, entity.JobStatusDownloading:
+// 					break
+// 				default:
+// 					t.Errorf("unexpected job status: %v", job.Status)
+// 				}
+
+// 				<-ctx.Done()
+// 				synctest.Wait()
+
+// 				ctxErr := ctx.Err()
+// 				if tc.expectDeadline {
+// 					job = svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+// 					if job == nil {
+// 						t.Errorf("failed to get job: %v", err)
+// 					}
+
+// 					if job != nil {
+// 						if job.Status != tc.expectStatus {
+// 							t.Errorf("expected job to be failed")
+// 						}
+
+// 						if job.Progress != tc.expectProgress {
+// 							t.Errorf("expected job progress to be %d, got: %d", tc.expectProgress, job.Progress)
+// 						}
+
+// 						if !errors.Is(ctxErr, context.DeadlineExceeded) {
+// 							t.Errorf("expected context.DeadlineExceeded, got: %v", ctxErr)
+// 						}
+// 					}
+// 				}
+
+// 				if !tc.expectDeadline {
+// 					job := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+// 					if job == nil {
+// 						t.Errorf("failed to get job: %v", err)
+// 					}
+
+// 					if job != nil {
+// 						if job.Status != tc.expectStatus {
+// 							t.Errorf("expected job to be finished")
+// 						}
+// 					}
+// 				}
+// 			})
+// 		})
+// 	}
+// }
+
+func TestEnqueue(t *testing.T) {
+	svc := NewTestService(t, NewTestCfg(testConfigPresetDefault))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -257,7 +367,7 @@ func TestGetJob(t *testing.T) {
 		t.Errorf("failed to enqueue job: %v", err)
 	}
 
-	got := svc.GetByURLAndPreset(ctx, testURL, testPresetMP4)
+	got := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
 	if got == nil && job.Status != entity.JobStatusStarting {
 		t.Errorf("expected job to be started")
 	}
@@ -266,12 +376,12 @@ func TestGetJob(t *testing.T) {
 		t.Errorf("expected job pointer to be the same")
 	}
 
-	got = svc.GetByID(ctx, job.ID)
+	got = svc.Storer.GetJobByID(ctx, job.UUID)
 	if got == nil && job.Status != entity.JobStatusStarting {
 		t.Errorf("expected job to be started")
 	}
 
-	job = svc.GetByURLAndPreset(ctx, testURL2, testPresetMP4)
+	job = svc.Storer.GetJobByURLAndPreset(ctx, testURL2, testPresetMP4)
 	if job != nil {
 		t.Errorf("expected error for non-existent job, got: %v", err)
 	}

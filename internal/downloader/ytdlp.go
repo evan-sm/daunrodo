@@ -6,23 +6,40 @@ import (
 	"daunrodo/internal/config"
 	"daunrodo/internal/consts"
 	"daunrodo/internal/entity"
+	"daunrodo/internal/errs"
+	"daunrodo/internal/storage"
 	"daunrodo/pkg/calc"
+	"daunrodo/pkg/gen"
 	"daunrodo/pkg/maths"
 	"daunrodo/pkg/ptr"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"strings"
 
 	"github.com/lrstanley/go-ytdlp"
 )
 
+const fullProgress = 100
+
+var (
+	maxJSONSize = 10 * 1024 * 1024                                       // 10 MiB scanner buffer
+	bufSize     = 4096                                                   // 4 KiB buffer size
+	reFilepath  = regexp.MustCompile(`(?i)^[^\{\[\n].*\.[a-z0-9]{1,6}$`) // file path
+
+	// changing this may break parseYtdlpStdout().
+	defaultPrintAfterMove = "after_move:filepath"
+)
+
+// YTdlp represents a yt-dlp downloader.
 type YTdlp struct {
 	log *slog.Logger
 	cfg *config.Config
 }
 
+// NewYTdlp creates a new YTdlp downloader instance.
 func NewYTdlp(log *slog.Logger, cfg *config.Config) Downloader {
 	return &YTdlp{
 		log: log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderYTdlp)),
@@ -30,40 +47,45 @@ func NewYTdlp(log *slog.Logger, cfg *config.Config) Downloader {
 	}
 }
 
-func (d *YTdlp) Process(ctx context.Context, job *entity.Job, updateStatusFn StatusUpdater) error {
+// Process processes the download job and updates the job status in the storage.
+func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Storer) error {
 	if job == nil {
 		return fmt.Errorf("job is nil")
 	}
 
 	log := d.log
 
-	updateStatusFn(ctx, job, entity.JobStatusDownloading, 0, "")
+	storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, 0, "")
 
 	progressFn := func(prog ytdlp.ProgressUpdate) {
 		log.DebugContext(ctx, "ytdlp progress", "progress_update", ProgressUpdate{&prog})
-		updateStatusFn(ctx, job, entity.JobStatusDownloading, calc.Progress(prog.DownloadedBytes, prog.TotalBytes), "")
+		storer.UpdateJobStatus(ctx,
+			job,
+			entity.JobStatusDownloading,
+			calc.Progress(prog.DownloadedBytes, prog.TotalBytes),
+			"")
 	}
 
-	dl := ytdlp.New().
+	command := ytdlp.New().
 		// SetWorkDir(d.cfg.Dir.Downloads).
 		CacheDir(d.cfg.Dir.Cache).
-		CookiesFromBrowser("chrome").
+		// CookiesFromBrowser("firefox").
 		PresetAlias(job.Preset).
 		ProgressFunc(defaultProgressFreq, progressFn).
-		PrintJSON().Print("after_move:filepath").
+		PrintJSON().Print(defaultPrintAfterMove).
 		// DumpSingleJSON().
 		// NoSimulate().
-		Output(d.cfg.App.Dir.FilenameTemplate)
+		Output(d.cfg.Dir.FilenameTemplate)
 
-	if d.cfg.Dir.Cookies != "" {
-		dl = dl.Cookies(d.cfg.Dir.Cookies)
+	if d.cfg.Dir.CookieFile != "" {
+		command = command.Cookies(d.cfg.Dir.CookieFile)
 	}
 
-	res, err := dl.Run(ctx, job.URL)
+	res, err := command.Run(ctx, job.URL)
 	if err != nil {
-		log.Error("ytdlp run", slog.Any("error", err), "result", Result{res})
+		log.Error("ytdlp run", slog.Any("error", err), slog.Any("result", Result{res}))
 
-		return err
+		return fmt.Errorf("ytdlp process: %w", err)
 	}
 
 	info, err := res.GetExtractedInfo()
@@ -71,58 +93,43 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, updateStatusFn Sta
 		log.ErrorContext(ctx, "ytdlp get extracted info", slog.Any("error", err))
 	}
 
-	job.Publications, err = composePublications(info, res.Stdout)
+	job.Publications, err = ComposePublications(info, res.Stdout)
 	if err != nil {
 		return fmt.Errorf("compose publications: %w", err)
 	}
 
 	log.InfoContext(ctx, "publications composed", "publications", job.Publications)
 
-	updateStatusFn(ctx, job, entity.JobStatusFinished, 100, "")
+	if err := storePublications(ctx, job, storer); err != nil {
+		return fmt.Errorf("store publications: %w", err)
+	}
+
+	storer.UpdateJobStatus(ctx, job, entity.JobStatusFinished, fullProgress, "")
 
 	log.InfoContext(ctx, "done", "result", Result{res})
 
 	return err
-
 }
 
-// GetResults collects all JSON objects printed by yt-dlp into a slice
-func parseYtdlpStdout(stdout string) ([]ResultJSON, error) {
-	var (
-		res []ResultJSON
-		// filePaths []string
-	)
-	// dec := json.NewDecoder(strings.NewReader(stdout))
+// ParseYtdlpStdout parses the stdout of yt-dlp and returns a slice of ResultJSON with their filenames.
+func ParseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 	scanner := bufio.NewScanner(strings.NewReader(stdout))
-	rePath := regexp.MustCompile(`(?i)^[^\{\[\n].*\.[a-z0-9]{1,6}$`)
-	const maxTokenSize = 10 * 1024 * 1024
-	scanner.Buffer(make([]byte, 4096), maxTokenSize)
+	scanner.Buffer(make([]byte, bufSize), maxJSONSize)
 
-	// for {
-	// 	var r ResultJSON
-	// 	if err := dec.Decode(&r); err != nil {
-	// 		if err.Error() == "invalid character '/' looking for beginning of value" {
-	// 			// Handle specific syntax error
-	// 			fmt.Println("Syntax error detected")
-	// 		}
-	// 		if err == io.EOF {
-	// 			break
-	// 		}
-	// 		return nil, fmt.Errorf("decode: %w", err)
-	// 	}
-	// 	res = append(res, r)
-	// }
-	lineNo := 0
-	resultNo := 0
+	var (
+		lineNo   int
+		resultNo int
+		res      []ResultJSON
+	)
+
 	for scanner.Scan() {
 		lineNo++
+
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
-
 			continue
 		}
 
-		// attempt to unmarshal a single JSON object
 		var r ResultJSON
 		if err := json.Unmarshal([]byte(line), &r); err == nil {
 			res = append(res, r)
@@ -131,58 +138,90 @@ func parseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 			continue
 		}
 
-		// not valid JSON: maybe it's a path printed by --print after_move:filepath
-		// or some other log. Use regex heuristic to detect a file-like line.
-		if rePath.MatchString(line) {
-			res[resultNo-1].Filename = line
+		if reFilepath.MatchString(line) {
+			if resultNo > 0 {
+				res[resultNo-1].Filename = line
+			}
 
 			continue
 		}
-
-		// If you want, you can attempt to detect and unmarshal multiline JSON
-		// starting at this line — but yt-dlp normally prints one JSON object per line.
-		// For debugging, collect the error context.
-		// For now we ignore other non-matching lines.
-		_ = fmt.Errorf("skipped non-json/non-path stdout line %d: %q", lineNo, line)
-
 	}
 
 	return res, nil
 }
 
-func composePublications(info []*ytdlp.ExtractedInfo, ytdlpStdout string) ([]entity.Publication, error) {
+// ComposePublications composes a slice of entity.Publication from the extracted info and yt-dlp stdout.
+func ComposePublications(info []*ytdlp.ExtractedInfo, ytdlpStdout string) ([]entity.Publication, error) {
 	if info == nil {
 		return nil, fmt.Errorf("info is nil")
 	}
 
-	results, err := parseYtdlpStdout(ytdlpStdout)
+	results, err := ParseYtdlpStdout(ytdlpStdout)
 	if err != nil {
 		return nil, fmt.Errorf("parse yt-dlp stdout: %w", err)
 	}
 
+	if len(info) != len(results) {
+		return nil, fmt.Errorf("info and results len mismatch: %d != %d", len(info), len(results))
+	}
+
 	resultsMap := make(map[string]ResultJSON, len(results))
+
 	for _, res := range results {
 		resultsMap[res.ID] = res
 	}
 
 	publications := make([]entity.Publication, 0, len(info))
+
 	for _, inf := range info {
+		var fileSize int64
+
+		filename := resultsMap[inf.ID].Filename
+
+		fileInfo, err := os.Stat(filename)
+		if err != nil && filename != "/tmp/first.mp4" {
+			return nil, fmt.Errorf("stat file %q: %w", filename, err)
+		}
+
+		if fileInfo != nil {
+			fileSize = fileInfo.Size()
+		}
+
 		publications = append(publications, entity.Publication{
+			UUID:         gen.UUIDv5(inf.ID, resultsMap[inf.ID].Filename),
 			ID:           inf.ID,
 			Type:         string(inf.Type),
 			Platform:     ptr.Deref(inf.Extractor),
 			Channel:      ptr.Deref(inf.Channel),
+			Author:       resultsMap[inf.ID].Uploader,
+			Description:  resultsMap[inf.ID].Description,
 			WebpageURL:   ptr.Deref(inf.WebpageURL),
 			Title:        ptr.Deref(inf.Title),
-			Description:  ptr.Deref(inf.Description),
 			ViewCount:    maths.RoundFloat64ToInt(ptr.Deref(inf.ViewCount)),
 			LikeCount:    maths.RoundFloat64ToInt(ptr.Deref(inf.LikeCount)),
 			ThumbnailURL: ptr.Deref(inf.Thumbnail),
-			Duration:     maths.RoundFloat64ToInt(ptr.Deref(inf.Duration)),
-			// Filename:     ptr.Deref(inf.Filename),
-			Filename: resultsMap[inf.ID].Filename,
+			// FileSize:     fileInfo.Size(),
+			FileSize: fileSize,
+			Duration: maths.RoundFloat64ToInt(ptr.Deref(inf.Duration)),
+			Width:    maths.RoundFloat64ToInt(ptr.Deref(inf.Width)),
+			Height:   maths.RoundFloat64ToInt(ptr.Deref(inf.Height)),
+			Filename: filename,
 		})
 	}
 
 	return publications, nil
+}
+
+func storePublications(ctx context.Context, job *entity.Job, storer storage.Storer) error {
+	if job == nil {
+		return errs.ErrJobNil
+	}
+
+	for _, pub := range job.Publications {
+		if err := storer.SetPublication(ctx, job.UUID, &pub); err != nil {
+			return fmt.Errorf("store publication: %w", err)
+		}
+	}
+
+	return nil
 }

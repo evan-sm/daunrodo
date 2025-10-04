@@ -1,0 +1,8 @@
+
+{"id":"one","title":"First", "filename": "/tmp/first.mp4"}
+
+this-is-not-a-json-or-path
+
+{"id":"two","title":"Second", "filename": "/tmp/first.mp4"}
+/tmp/first.mp4
+

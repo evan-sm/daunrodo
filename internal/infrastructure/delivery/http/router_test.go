@@ -1,14 +1,17 @@
-package httprouter
+package httprouter_test
 
 import (
 	"daunrodo/internal/config"
 	"daunrodo/internal/downloader"
+	httprouter "daunrodo/internal/infrastructure/delivery/http"
 	"daunrodo/internal/service"
+	"daunrodo/internal/storage"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestRouter(t *testing.T) {
@@ -17,6 +20,7 @@ func TestRouter(t *testing.T) {
 	mw1 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "1"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -24,6 +28,7 @@ func TestRouter(t *testing.T) {
 	mw2 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "2"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -31,6 +36,7 @@ func TestRouter(t *testing.T) {
 	mw3 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "3"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -38,6 +44,7 @@ func TestRouter(t *testing.T) {
 	mw4 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "4"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -45,6 +52,7 @@ func TestRouter(t *testing.T) {
 	mw5 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "5"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -52,38 +60,42 @@ func TestRouter(t *testing.T) {
 	mw6 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "6"
+
 			next.ServeHTTP(w, r)
 		})
 	}
 
-	hf := func(w http.ResponseWriter, r *http.Request) {}
+	handleFn := func(_ http.ResponseWriter, _ *http.Request) {}
 
+	ctx := t.Context()
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	downloader := downloader.NewMock(log)
-	svc := service.New(&config.Config{}, log, downloader)
+	cfg := &config.Config{Storage: config.Storage{CleanupInterval: time.Minute}}
+	storer := storage.New(ctx, log, cfg)
+	svc := service.New(cfg, log, downloader, storer)
 
-	r := New(log, svc)
-	r.Use(mw1)
-	r.Use(mw2)
+	router := httprouter.New(log, nil, svc, storer)
+	router.Use(mw1)
+	router.Use(mw2)
 
-	r.HandleFunc("GET /{$}", hf)
+	router.HandleFunc("GET /{$}", handleFn)
 
-	r.Group(func(r *Router) {
+	router.Group(func(r *httprouter.Router) {
 		r.Use(mw3, mw4)
-		r.HandleFunc("GET /foo", hf)
+		r.HandleFunc("GET /foo", handleFn)
 
-		r.Group(func(r *Router) {
+		r.Group(func(r *httprouter.Router) {
 			r.Use(mw5)
-			r.HandleFunc("GET /nested/foo", hf)
+			r.HandleFunc("GET /nested/foo", handleFn)
 		})
 	})
 
-	r.Group(func(r *Router) {
+	router.Group(func(r *httprouter.Router) {
 		r.Use(mw6)
-		r.HandleFunc("GET /bar", hf)
+		r.HandleFunc("GET /bar", handleFn)
 	})
 
-	r.HandleFunc("GET /baz", hf)
+	router.HandleFunc("GET /baz", handleFn)
 
 	var tests = []struct {
 		RequestMethod  string
@@ -139,32 +151,36 @@ func TestRouter(t *testing.T) {
 	for _, test := range tests {
 		used = ""
 
-		rq, err := http.NewRequest(test.RequestMethod, test.RequestPath, nil)
+		req, err := http.NewRequestWithContext(ctx, test.RequestMethod, test.RequestPath, nil)
 		if err != nil {
 			t.Errorf("NewRequest: %s", err)
 		}
 
 		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, rq)
+		router.ServeHTTP(rr, req)
 
 		rs := rr.Result()
 
 		if rs.StatusCode != test.ExpectedStatus {
-			t.Errorf("%s %s: expected status %d but was %d", test.RequestMethod, test.RequestPath, test.ExpectedStatus, rs.StatusCode)
+			t.Errorf("%s %s: expected status %d but was %d",
+				test.RequestMethod, test.RequestPath, test.ExpectedStatus, rs.StatusCode)
 		}
 
 		if used != test.ExpectedUsed {
-			t.Errorf("%s %s: middleware used: expected %q; got %q", test.RequestMethod, test.RequestPath, test.ExpectedUsed, used)
+			t.Errorf("%s %s: middleware used: expected %q; got %q",
+				test.RequestMethod, test.RequestPath, test.ExpectedUsed, used)
 		}
 	}
 }
 
 func TestChain(t *testing.T) {
+	ctx := t.Context()
 	used := ""
 
 	mw1 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "1"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -172,6 +188,7 @@ func TestChain(t *testing.T) {
 	mw2 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "2"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -179,6 +196,7 @@ func TestChain(t *testing.T) {
 	mw3 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "3"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -186,6 +204,7 @@ func TestChain(t *testing.T) {
 	mw4 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "4"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -193,6 +212,7 @@ func TestChain(t *testing.T) {
 	mw5 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "5"
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -200,28 +220,29 @@ func TestChain(t *testing.T) {
 	mw6 := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			used += "6"
+
 			next.ServeHTTP(w, r)
 		})
 	}
 
-	hf := func(w http.ResponseWriter, r *http.Request) {}
+	handleFn := func(_ http.ResponseWriter, _ *http.Request) {}
 
-	m := http.NewServeMux()
+	mux := http.NewServeMux()
 
-	c1 := chain{mw1, mw2}
+	chain1 := httprouter.Chain{mw1, mw2}
 
-	m.Handle("GET /{$}", c1.thenFunc(hf))
+	mux.Handle("GET /{$}", chain1.ThenFunc(handleFn))
 
-	c2 := append(c1, mw3, mw4)
-	m.Handle("GET /foo", c2.thenFunc(hf))
+	chain2 := append(chain1, mw3, mw4)
+	mux.Handle("GET /foo", chain2.ThenFunc(handleFn))
 
-	c3 := append(c2, mw5)
-	m.Handle("GET /nested/foo", c3.thenFunc(hf))
+	chain3 := append(chain2, mw5)
+	mux.Handle("GET /nested/foo", chain3.ThenFunc(handleFn))
 
-	c4 := append(c1, mw6)
-	m.Handle("GET /bar", c4.thenFunc(hf))
+	chain4 := append(chain1, mw6)
+	mux.Handle("GET /bar", chain4.ThenFunc(handleFn))
 
-	m.Handle("GET /baz", c1.thenFunc(hf))
+	mux.Handle("GET /baz", chain1.ThenFunc(handleFn))
 
 	var tests = []struct {
 		RequestMethod  string
@@ -264,22 +285,30 @@ func TestChain(t *testing.T) {
 	for _, test := range tests {
 		used = ""
 
-		r, err := http.NewRequest(test.RequestMethod, test.RequestPath, nil)
+		r, err := http.NewRequestWithContext(ctx, test.RequestMethod, test.RequestPath, nil)
 		if err != nil {
 			t.Errorf("NewRequest: %s", err)
 		}
 
 		rr := httptest.NewRecorder()
-		m.ServeHTTP(rr, r)
+		mux.ServeHTTP(rr, r)
 
-		rs := rr.Result()
+		res := rr.Result()
 
-		if rs.StatusCode != test.ExpectedStatus {
-			t.Errorf("%s %s: expected status %d but was %d", test.RequestMethod, test.RequestPath, test.ExpectedStatus, rs.StatusCode)
+		if res.StatusCode != test.ExpectedStatus {
+			t.Errorf("%s %s: expected status %d but was %d",
+				test.RequestMethod,
+				test.RequestPath,
+				test.ExpectedStatus,
+				res.StatusCode)
 		}
 
 		if used != test.ExpectedUsed {
-			t.Errorf("%s %s: middleware used: expected %q; got %q", test.RequestMethod, test.RequestPath, test.ExpectedUsed, used)
+			t.Errorf("%s %s: middleware used: expected %q; got %q",
+				test.RequestMethod,
+				test.RequestPath,
+				test.ExpectedUsed,
+				used)
 		}
 	}
 }

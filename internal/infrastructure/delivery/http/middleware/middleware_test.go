@@ -1,4 +1,4 @@
-package middleware
+package middleware_test
 
 import (
 	"bytes"
@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"daunrodo/internal/infrastructure/delivery/http/middleware"
 
 	"github.com/google/uuid"
 )
@@ -23,7 +25,7 @@ func TestRecoverer(t *testing.T) {
 	}{
 		{
 			name: "no panic",
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("ok"))
 			},
@@ -33,7 +35,7 @@ func TestRecoverer(t *testing.T) {
 		},
 		{
 			name: "string panic",
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(_ http.ResponseWriter, _ *http.Request) {
 				panic("test panic")
 			},
 			wantPanic:  nil,
@@ -42,7 +44,7 @@ func TestRecoverer(t *testing.T) {
 		},
 		{
 			name: "error panic",
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(_ http.ResponseWriter, _ *http.Request) {
 				panic(errors.New("test error panic"))
 			},
 			wantPanic:  nil,
@@ -51,7 +53,7 @@ func TestRecoverer(t *testing.T) {
 		},
 		{
 			name: "http.ErrAbortHandler re-panic",
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(_ http.ResponseWriter, _ *http.Request) {
 				panic(http.ErrAbortHandler)
 			},
 			wantPanic:  http.ErrAbortHandler,
@@ -60,7 +62,7 @@ func TestRecoverer(t *testing.T) {
 		},
 		{
 			name: "panic after response started",
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("ok"))
 				panic("test panic")
@@ -77,33 +79,35 @@ func TestRecoverer(t *testing.T) {
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				called = true
+
 				tt.handler(w, r)
 			})
 
-			mw := Recoverer(next)
-			req := httptest.NewRequest("GET", "/", nil)
-			w := httptest.NewRecorder()
+			middleware := middleware.Recoverer(next)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
 
 			if tt.wantPanic != nil {
 				defer func() {
-					r := recover()
-					if r == nil {
+					recovered := recover()
+					if recovered == nil {
 						t.Error("expected panic, got none")
 					}
-					if r != tt.wantPanic {
-						t.Errorf("got panic %v, want %v", r, tt.wantPanic)
+
+					if recovered != tt.wantPanic {
+						t.Errorf("got panic %v, want %v", recovered, tt.wantPanic)
 					}
 				}()
 			}
 
-			mw.ServeHTTP(w, req)
+			middleware.ServeHTTP(rec, req)
 
 			if called != tt.wantCalled {
 				t.Errorf("got called %v, want %v", called, tt.wantCalled)
 			}
 
 			if tt.wantStatus != 0 {
-				if got := w.Result().StatusCode; got != tt.wantStatus {
+				if got := rec.Result().StatusCode; got != tt.wantStatus {
 					t.Errorf("got status %v, want %v", got, tt.wantStatus)
 				}
 			}
@@ -118,44 +122,45 @@ func TestLogger(t *testing.T) {
 	slog.SetDefault(log)
 
 	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
+
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`done`))
 	})
 
-	mw := Logger(next)
+	logger := middleware.Logger(next)
 
-	req := httptest.NewRequest("POST", "http://example.com/foo?bar=baz", nil)
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/foo?bar=baz", nil)
 	req.RemoteAddr = "1.2.3.4:1234"
 	req.Proto = "HTTP/1.1"
 	req.ContentLength = 123
 	now := time.Now()
 
-	w := httptest.NewRecorder()
+	rec := httptest.NewRecorder()
 
-	mw.ServeHTTP(w, req)
+	logger.ServeHTTP(rec, req)
 
 	if !called {
 		t.Error("next handler was not called")
 	}
 
-	if got, want := w.Code, http.StatusOK; got != want {
+	if got, want := rec.Code, http.StatusOK; got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
-	if body := w.Body.String(); body != "done" {
+	if body := rec.Body.String(); body != "done" {
 		t.Errorf("got %q, want %q", body, "done")
 	}
 
 	var logEntry struct {
-		Time    time.Time  `json:"time"`
-		Level   string     `json:"level"`
-		Msg     string     `json:"msg"`
-		Request requestLog `json:"request"`
+		Time    time.Time             `json:"time"`
+		Level   string                `json:"level"`
+		Msg     string                `json:"msg"`
+		Request middleware.RequestLog `json:"request"`
 	}
 
-	logged := buf.String() // "{\"time\":\"2025-07-20T11:14:19.88118+03:00\",\"level\":\"DEBUG\",\"msg\":\"http_request\",\"request\":{\"method\":\"POST\",\"uri\":\"http://example.com/foo?bar=baz\",\"remote_addr\":\"1.2.3.4:1234\",\"proto\":\"HTTP/1.1\",\"content_length\":123}}\n"
+	logged := buf.String()
 	if err := json.Unmarshal([]byte(logged), &logEntry); err != nil {
 		t.Errorf("failed to unmarshal log entry: %v", err)
 	}
@@ -172,18 +177,22 @@ func TestLogger(t *testing.T) {
 		t.Errorf("got %q, want %q", logEntry.Msg, "http request")
 	}
 
-	if logEntry.Request.Method != "POST" {
-		t.Errorf("got %q, want %q", logEntry.Request.Method, "POST")
+	if logEntry.Request.Method != http.MethodPost {
+		t.Errorf("got %q, want %q", logEntry.Request.Method, http.MethodPost)
 	}
+
 	if logEntry.Request.URI != "http://example.com/foo?bar=baz" {
 		t.Errorf("got %q, want %q", logEntry.Request.URI, "http://example.com/foo?bar=baz")
 	}
+
 	if logEntry.Request.RemoteAddr != "1.2.3.4:1234" {
 		t.Errorf("got %q, want %q", logEntry.Request.RemoteAddr, "1.2.3.4:1234")
 	}
+
 	if logEntry.Request.Proto != "HTTP/1.1" {
 		t.Errorf("got %q, want %q", logEntry.Request.Proto, "HTTP/1.1")
 	}
+
 	if logEntry.Request.ContentLength != 123 {
 		t.Errorf("got %q, want %q", logEntry.Request.ContentLength, 123)
 	}
@@ -205,6 +214,7 @@ func TestRequestID(t *testing.T) {
 			headerValue: "",
 			validateID: func(id string) bool {
 				_, err := uuid.Parse(id)
+
 				return err == nil
 			},
 		},
@@ -215,32 +225,34 @@ func TestRequestID(t *testing.T) {
 			ctxChecked := false
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				reqID, ok := r.Context().Value(RequestIDKey).(string)
+				reqID, ok := r.Context().Value(middleware.RequestIDKey).(string)
 				if !ok {
 					t.Error("requestID is missing in context")
 				}
+
 				if !tt.validateID(reqID) {
 					t.Errorf("requestID in context is invalid: %s", reqID)
 				}
 
 				ctxChecked = true
+
 				w.Write([]byte("ok"))
 			})
 
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tt.headerValue != "" {
 				req.Header.Set("X-Request-ID", tt.headerValue)
 			}
 
-			w := httptest.NewRecorder()
-			mw := RequestID(next)
-			mw.ServeHTTP(w, req)
+			rec := httptest.NewRecorder()
+			mw := middleware.RequestID(next)
+			mw.ServeHTTP(rec, req)
 
 			if !ctxChecked {
 				t.Error("next handler was not called or context was not checked")
 			}
 
-			res := w.Result()
+			res := rec.Result()
 
 			resID := res.Header.Get("X-Request-ID")
 			if resID == "" {

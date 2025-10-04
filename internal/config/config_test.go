@@ -1,8 +1,9 @@
-package config
+package config_test
 
 import (
 	"bufio"
 	"bytes"
+	"daunrodo/internal/config"
 	_ "embed"
 	"fmt"
 	"io"
@@ -12,9 +13,6 @@ import (
 	"testing"
 )
 
-//go:embed testdata/.env.empty
-var envEmpty []byte
-
 //go:embed testdata/.env.custom.dir
 var envCustomDir []byte
 
@@ -22,10 +20,10 @@ func parseEnv(r io.Reader) (map[string]string, error) {
 	env := make(map[string]string)
 	lineNo := 0
 
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
 		lineNo++
-		line := strings.TrimSpace(sc.Text())
+		line := strings.TrimSpace(scanner.Text())
 
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -35,44 +33,46 @@ func parseEnv(r io.Reader) (map[string]string, error) {
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid line %d: %q", lineNo, line)
 		}
+
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 		env[key] = value
 	}
-	return env, sc.Err()
+
+	err := scanner.Err()
+
+	return env, fmt.Errorf("scan env: %w", err)
 }
 
-func applyEnv(env map[string]string) (err error) {
+func applyEnv(env map[string]string) error {
 	os.Clearenv()
 
 	for key, value := range env {
-		err = os.Setenv(key, value)
+		err := os.Setenv(key, value)
 		if err != nil {
-			return err
+			return fmt.Errorf("apply env: %w", err)
 		}
 	}
 
-	return
+	return nil
 }
 
 func TestNew(t *testing.T) {
 	tests := []struct {
 		name    string // description of this test case
 		env     []byte
-		want    *Config
+		want    *config.Config
 		wantErr bool
 	}{
 		{
 			name: "custom dir",
 			env:  envCustomDir,
-			want: &Config{
-				App: App{
-					Dir: Dir{
-						Downloads:        "./data/downloads",
-						Cache:            "./data/cache",
-						Cookies:          "./data/cookies",
-						FilenameTemplate: "./%(extractor)s - %(title)s [%(id)s].%(ext)s",
-					},
+			want: &config.Config{
+				Dir: config.Dir{
+					Downloads:        "./data/downloads",
+					Cache:            "./data/cache",
+					CookieFile:       "./data/cookies/cookies.txt",
+					FilenameTemplate: "./%(extractor)s - %(title)s [%(id)s].%(ext)s",
 				},
 			},
 		},
@@ -83,29 +83,40 @@ func TestNew(t *testing.T) {
 			env, err := parseEnv(bytes.NewReader(tt.env))
 			if err != nil {
 				t.Errorf("parseEnv() failed: %v", err)
-				return
-			}
-			if err := applyEnv(env); err != nil {
-				t.Errorf("applyEnv() failed: %v", err)
+
 				return
 			}
 
-			got, err := New()
+			if err := applyEnv(env); err != nil {
+				t.Errorf("applyEnv() failed: %v", err)
+
+				return
+			}
+
+			got, err := config.New()
 			if err != nil && !tt.wantErr {
 				t.Errorf("New() failed: %v", err)
 			}
 
-			if !filepath.IsAbs(got.App.Dir.Downloads) {
-				t.Errorf("expected absolute path, got %s", got.App.Dir.Downloads)
+			if !filepath.IsAbs(got.Dir.Downloads) {
+				t.Errorf("expected absolute path, got %s", got.Dir.Downloads)
 			}
-			if !filepath.IsAbs(got.App.Dir.Cache) {
-				t.Errorf("expected absolute path, got %s", got.App.Dir.Cache)
+
+			if !filepath.IsAbs(got.Dir.Cache) {
+				t.Errorf("expected absolute path, got %s", got.Dir.Cache)
 			}
-			if !filepath.IsAbs(got.App.Dir.Cookies) {
-				t.Errorf("expected absolute path, got %s", got.App.Dir.Cookies)
+
+			pwd, err := os.Getwd()
+			if err != nil {
+				t.Errorf("failed to get current working directory: %v", err)
 			}
-			if !filepath.IsAbs(got.App.Dir.FilenameTemplate) {
-				t.Errorf("expected absolute path, got %s", got.App.Dir.FilenameTemplate)
+
+			if _, err := os.Stat(fmt.Sprintf("%s/%s", pwd, got.Dir.CookieFile)); err != nil {
+				t.Errorf("expected cookie file to exist, got %s", got.Dir.CookieFile)
+			}
+
+			if !filepath.IsAbs(got.Dir.FilenameTemplate) {
+				t.Errorf("expected absolute path, got %s", got.Dir.FilenameTemplate)
 			}
 		})
 	}

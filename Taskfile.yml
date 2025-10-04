@@ -10,3 +10,7 @@ tasks:
     cmds:
       - echo "{{.GREETING}}"
     silent: true
+  lint :
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run

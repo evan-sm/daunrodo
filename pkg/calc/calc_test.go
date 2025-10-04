@@ -1,6 +1,7 @@
-package calc
+package calc_test
 
 import (
+	"daunrodo/pkg/calc"
 	"testing"
 	"time"
 )
@@ -23,10 +24,11 @@ func TestProgress(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := Progress(tc.downloaded, tc.total)
+
+			got := calc.Progress(tc.downloaded, tc.total)
+
 			if got != tc.want {
 				t.Fatalf("Progress(%d, %d) = %d; want %d", tc.downloaded, tc.total, got, tc.want)
 			}
@@ -38,6 +40,7 @@ func approxEqual(a, b, tol time.Duration) bool {
 	if a < b {
 		return b-a <= tol
 	}
+
 	return a-b <= tol
 }
 
@@ -57,17 +60,17 @@ func TestETA(t *testing.T) {
 	const tolerance = 50 * time.Millisecond
 
 	for _, tc := range tests {
-		tc := tc // capture
 		t.Run(tc.name, func(t *testing.T) {
 			// Set started to a fixed elapsed duration in the past.
 			started := time.Now().Add(-tc.elapsed)
 
-			got := ETA(tc.downloaded, tc.total, started)
+			got := calc.ETA(tc.downloaded, tc.total, started)
 
 			if tc.total == 0 {
 				if got != 0 {
 					t.Fatalf("expected 0 when total==0, got %v", got)
 				}
+
 				return
 			}
 

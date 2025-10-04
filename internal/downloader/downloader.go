@@ -1,20 +1,18 @@
+// Package downloader defines the downloader interface and related models.
 package downloader
 
 import (
 	"context"
 	"daunrodo/internal/entity"
+	"daunrodo/internal/storage"
 	"time"
 )
 
 const (
-	defaultPreset         = "mp4"
-	defaultOutputTemplate = "%(extractor)s - %(title)s [%(id)s].%(ext)s"
-	defaultProgressFreq   = 200 * time.Millisecond
+	defaultProgressFreq = 200 * time.Millisecond
 )
 
+// Downloader defines the interface for downloading content based on a job.
 type Downloader interface {
-	Process(ctx context.Context, job *entity.Job, updateStatusFunc StatusUpdater) error
-	// JobTimeout() time.Duration
+	Process(ctx context.Context, job *entity.Job, storer storage.Storer) error
 }
-
-type StatusUpdater func(ctx context.Context, job *entity.Job, status entity.JobStatus, progress int, errorMsg string)

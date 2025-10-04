@@ -4,56 +4,62 @@ import (
 	"context"
 	"daunrodo/internal/consts"
 	"daunrodo/internal/entity"
+	"daunrodo/internal/storage"
 	"fmt"
 	"log/slog"
 	"time"
 )
 
+// mock is a mock implementation of the Downloader interface for testing purposes.
 type mock struct {
 	log *slog.Logger
 }
 
+// ProgressCallbackFunc defines the type for progress update callbacks.
 type ProgressCallbackFunc func(update ProgressUpdateMock)
 
+// ProgressUpdateMock represents a mock progress update.
 type ProgressUpdateMock struct {
 	Progress int
 	ETA      string
 }
 
+// NewMock creates a new Mock downloader instance.
 func NewMock(log *slog.Logger) Downloader {
 	return &mock{log: log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderMock))}
 }
 
-func (m *mock) Process(ctx context.Context, job *entity.Job, updateStatusFn StatusUpdater) (err error) {
+// Process processes the download job and updates the job status in the storage.
+func (m *mock) Process(ctx context.Context, job *entity.Job, storer storage.Storer) error {
 	if job == nil {
 		return fmt.Errorf("job is nil")
 	}
 
-	log := m.log.With(slog.String("func", "Process"), "job", job)
+	log := m.log.With(slog.Any("job", job))
 
-	updateStatusFn(ctx, job, entity.JobStatusDownloading, 0, "")
+	storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, 0, "")
 
 	progressFn := func(prog ProgressUpdateMock) {
 		log.InfoContext(ctx, "job progress", slog.Int("progress", prog.Progress), slog.String("eta", prog.ETA))
-		updateStatusFn(ctx, job, entity.JobStatusDownloading, prog.Progress, "")
+		storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, prog.Progress, "")
 	}
 
-	err = simulateDownload(ctx, consts.DefaultSimulateTime, progressFn)
+	err := simulateDownload(ctx, consts.DefaultSimulateTime, progressFn)
 	if err != nil {
 		log.Error("simulate download", slog.Any("error", err))
-		updateStatusFn(ctx, job, entity.JobStatusError, 0, err.Error())
+		storer.UpdateJobStatus(ctx, job, entity.JobStatusError, 0, err.Error())
 
 		return err
 	}
 
-	updateStatusFn(ctx, job, entity.JobStatusFinished, 100, "")
+	storer.UpdateJobStatus(ctx, job, entity.JobStatusFinished, fullProgress, "")
 
 	log.InfoContext(ctx, "processing job")
 
 	return err
 }
 
-func simulateDownload(ctx context.Context, duration time.Duration, progressFn ProgressCallbackFunc) (err error) {
+func simulateDownload(ctx context.Context, duration time.Duration, progressFn ProgressCallbackFunc) error {
 	steps := 10
 	step := 0
 
@@ -65,14 +71,15 @@ func simulateDownload(ctx context.Context, duration time.Duration, progressFn Pr
 	for step <= steps {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("simulate download: %w", ctx.Err())
 		case <-ticker.C:
-			progress := step * (100 / steps)
+			progress := step * (fullProgress / steps)
 			eta := fmt.Sprintf("%.0f seconds", duration.Seconds()-time.Since(start).Seconds())
 			progressFn(ProgressUpdateMock{Progress: progress, ETA: eta})
+
 			step++
 		}
 	}
 
-	return err
+	return nil
 }

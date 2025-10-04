@@ -8,18 +8,20 @@ import (
 	"github.com/lrstanley/go-ytdlp"
 )
 
+// Result wraps ytdlp.Result for custom logging.
 type Result struct {
 	*ytdlp.Result
 }
 
+// LogValue implements the slog.LogValuer interface for custom logging of Result.
 func (r Result) LogValue() slog.Value {
 	if r.Result == nil {
 		return slog.GroupValue(slog.String("error", "nil result"))
 	}
 
 	var OutputLogs string
-	if r.Result.OutputLogs != nil {
-		for _, log := range r.Result.OutputLogs {
+	if r.OutputLogs != nil {
+		for _, log := range r.OutputLogs {
 			OutputLogs += fmt.Sprintf("%s\n", log)
 		}
 	}
@@ -33,10 +35,12 @@ func (r Result) LogValue() slog.Value {
 	)
 }
 
+// ProgressUpdate wraps ytdlp.ProgressUpdate for custom logging.
 type ProgressUpdate struct {
 	*ytdlp.ProgressUpdate
 }
 
+// LogValue implements the slog.LogValuer interface for custom logging of ProgressUpdate.
 func (p ProgressUpdate) LogValue() slog.Value {
 	if p.ProgressUpdate == nil {
 		return slog.GroupValue(slog.String("error", "nil progress update"))
@@ -53,10 +57,10 @@ func (p ProgressUpdate) LogValue() slog.Value {
 		slog.Time("started", p.Started),
 		slog.Time("finished", p.Finished),
 		slog.String("eta", calc.ETA(p.DownloadedBytes, p.TotalBytes, p.Started).String()),
-		// slog.Any("info", p.ProgressUpdate.Info),
 	)
 }
 
+// ResultJSON represents the JSON output from yt-dlp.
 type ResultJSON struct {
 	Type               string    `json:"_type"`
 	ID                 string    `json:"id"`
@@ -85,6 +89,7 @@ type ResultJSON struct {
 	Filename           string    `json:"filename"`
 }
 
+// Entries represents an entry in a playlist or multiple entries result.
 type Entries struct {
 	ID                 string  `json:"id"`
 	Title              string  `json:"title"`
@@ -147,6 +152,7 @@ type Entries struct {
 	AudioChannels      any     `json:"audio_channels"`
 }
 
+// Version represents the version information of yt-dlp.
 type Version struct {
 	Version        string `json:"version"`
 	CurrentGitHead any    `json:"current_git_head"`
