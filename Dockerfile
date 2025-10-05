@@ -4,7 +4,7 @@ RUN apk add --update --no-cache tzdata
 
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" ./cmd/app
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o app
 
 FROM alpine
 #FROM scratch

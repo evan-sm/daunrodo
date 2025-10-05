@@ -39,9 +39,11 @@ func parseEnv(r io.Reader) (map[string]string, error) {
 		env[key] = value
 	}
 
-	err := scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan env: %w", err)
+	}
 
-	return env, fmt.Errorf("scan env: %w", err)
+	return env, nil
 }
 
 func applyEnv(env map[string]string) error {
