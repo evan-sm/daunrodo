@@ -31,13 +31,15 @@ type RequestLog struct {
 // Recoverer is a middleware that recovers from panics in HTTP handlers.
 func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
+		defer func(ctx context.Context) {
 			if rvr := recover(); rvr != nil {
+				slog.ErrorContext(ctx, "middleware: panic recovered", slog.Any("error", rvr))
+
 				if rvr == http.ErrAbortHandler {
 					panic(rvr)
 				}
 			}
-		}()
+		}(r.Context())
 
 		next.ServeHTTP(w, r)
 	})

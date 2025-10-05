@@ -57,7 +57,8 @@ func OK(w http.ResponseWriter, message string, res any, err error) {
 
 // NoContent sends a 204 No Content response.
 func NoContent(w http.ResponseWriter) {
-	WriteJSON(w, http.StatusNoContent, "no content", nil, nil)
+	w.Header().Del("Content-Type")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Created sends a 201 Created response with the provided message, result, and error.
@@ -73,6 +74,11 @@ func Accepted(w http.ResponseWriter, message string, res any, err error) {
 // BadRequest sends a 400 Bad Request response with the provided message and error.
 func BadRequest(w http.ResponseWriter, message string, err error) {
 	WriteJSON(w, http.StatusBadRequest, message, nil, err)
+}
+
+// NotFound sends a 404 Not Found response with the provided message and error.
+func NotFound(w http.ResponseWriter, message string, err error) {
+	WriteJSON(w, http.StatusNotFound, message, nil, err)
 }
 
 // UnprocessableEntity sends a 422 Unprocessable Entity response with the provided message and error.

@@ -35,9 +35,12 @@ func main() {
 		Level:     cfg.App.LogLevel,
 	})
 	if err != nil {
-		slog.Error("logger new", slog.Any("error", err))
-		os.Exit(1)
+		slog.WarnContext(ctx, "logger level invalid; defaulting to info", slog.Any("error", err))
 	}
+
+	log.InfoContext(ctx, "checking if yt-dlp, ffmpeg, ffprobe isn't installed yet. it may take some time...")
+	// If yt-dlp, ffmpeg, ffprobe isn't installed yet, download and cache it for further use.
+	ytdlp.MustInstallAll(ctx)
 
 	downloader := downloader.NewYTdlp(log, cfg)
 	storer := storage.New(ctx, log, cfg)
@@ -52,10 +55,6 @@ func main() {
 		Addr:            cfg.HTTP.Port,
 		ShutdownTimeout: cfg.HTTP.ShutdownTimeout,
 	})
-
-	log.InfoContext(ctx, "checking if yt-dlp, ffmpeg, ffprobe isn't installed yet. it may take some time...")
-	// If yt-dlp, ffmpeg, ffprobe isn't installed yet, download and cache it for further use.
-	ytdlp.MustInstallAll(ctx)
 
 	svc.Start(ctx)
 

@@ -222,7 +222,7 @@ func (ro *Router) GetJob(w http.ResponseWriter, r *http.Request) {
 	job := ro.storer.GetJobByID(ctx, jobID)
 	if job == nil {
 		log.ErrorContext(ctx, consts.RespJobNotFound)
-		response.NoContent(w)
+		response.NotFound(w, consts.RespJobNotFound, nil)
 
 		return
 	}
@@ -240,7 +240,7 @@ func (ro *Router) GetJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, err := ro.storer.GetJobs(ctx)
 	if errors.Is(err, errs.ErrNoJobs) {
 		log.DebugContext(ctx, consts.RespNoJobs)
-		response.NoContent(w)
+		response.NotFound(w, consts.RespNoJobs, nil)
 
 		return
 	}
@@ -292,7 +292,7 @@ func (ro *Router) DownloadPublication(w http.ResponseWriter, r *http.Request) {
 	publication, err := ro.storer.GetPublicationByID(ctx, pubID)
 	if errors.Is(err, errs.ErrPublicationNotFound) {
 		log.ErrorContext(ctx, consts.RespPublicationNotFound, slog.Any("error", err))
-		response.NoContent(w)
+		response.NotFound(w, consts.RespPublicationNotFound, err)
 
 		return
 	}
@@ -307,7 +307,7 @@ func (ro *Router) DownloadPublication(w http.ResponseWriter, r *http.Request) {
 	file, err := os.Open(publication.Filename)
 	if err != nil {
 		log.ErrorContext(ctx, consts.RespFileNotFound, slog.Any("error", err))
-		response.NoContent(w)
+		response.NotFound(w, consts.RespFileNotFound, err)
 
 		return
 	}

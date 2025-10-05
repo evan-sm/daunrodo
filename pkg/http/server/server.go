@@ -3,6 +3,7 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -49,12 +50,17 @@ func (s *Server) Shutdown() error {
 	defer cancel()
 
 	err := s.server.Shutdown(ctx)
+	if err != nil {
+		return fmt.Errorf("httpserver shutdown: %w", err)
+	}
 
-	return fmt.Errorf("httpserver shutdown: %w", err)
+	return nil
 }
 
 func (s *Server) start() {
-	s.errCh <- s.server.ListenAndServe()
+	if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		s.errCh <- err
+	}
 
 	close(s.errCh)
 }
