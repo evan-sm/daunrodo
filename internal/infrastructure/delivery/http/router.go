@@ -187,7 +187,7 @@ func (ro *Router) Enqueue(w http.ResponseWriter, r *http.Request) {
 	job, err := ro.svc.Enqueue(ctx, req.URL, req.Preset)
 	if errors.Is(err, errs.ErrJobAlreadyExists) {
 		log.DebugContext(ctx, consts.RespJobAlreadyExists, slog.Any("error", err))
-		response.OK(w, consts.RespJobAlreadyExists, nil, nil)
+		response.OK(w, consts.RespJobAlreadyExists, job.UUID, nil)
 
 		return
 	}
