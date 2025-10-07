@@ -3,7 +3,9 @@ package response
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"reflect"
 )
 
 // Response represents a standard HTTP response structure.
@@ -11,12 +13,6 @@ type Response struct {
 	Message string `json:"message"`
 	Error   string `json:"error"`
 	Data    any    `json:"data"`
-}
-
-// ErrorResponse represents an error response.
-type ErrorResponse struct {
-	Message string `json:"message"`
-	Error   string `json:"error"`
 }
 
 // WriteJSON writes a JSON response with the given status, message, data, and error.
@@ -48,6 +44,38 @@ func WriteJSON(w http.ResponseWriter, status int, message string, data any, err 
 
 		return
 	}
+}
+
+// MarshalJSON used to convert nil into [] or {} in JSON responses.
+func (r Response) MarshalJSON() ([]byte, error) {
+	type alias Response
+
+	out := alias(r)
+
+	if out.Data == nil {
+		out.Data = ""
+	}
+
+	if out.Data != nil {
+		val := reflect.ValueOf(out.Data)
+		switch val.Kind() {
+		case reflect.Slice:
+			if val.IsNil() {
+				out.Data = reflect.MakeSlice(val.Type(), 0, 0).Interface()
+			}
+		case reflect.Map:
+			if val.IsNil() {
+				out.Data = reflect.MakeMapWithSize(val.Type(), 0).Interface()
+			}
+		}
+	}
+
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, fmt.Errorf("marshal response: %w", err)
+	}
+
+	return b, nil
 }
 
 // OK sends a 200 OK response with the provided message, result, and error.
