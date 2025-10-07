@@ -52,6 +52,10 @@ func (r Response) MarshalJSON() ([]byte, error) {
 
 	out := alias(r)
 
+	if out.Data == nil {
+		out.Data = ""
+	}
+
 	if out.Data != nil {
 		val := reflect.ValueOf(out.Data)
 		switch val.Kind() {
