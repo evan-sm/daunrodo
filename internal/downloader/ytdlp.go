@@ -3,6 +3,13 @@ package downloader
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"os"
+	"regexp"
+	"strings"
+
 	"daunrodo/internal/config"
 	"daunrodo/internal/consts"
 	"daunrodo/internal/entity"
@@ -12,12 +19,6 @@ import (
 	"daunrodo/pkg/gen"
 	"daunrodo/pkg/maths"
 	"daunrodo/pkg/ptr"
-	"encoding/json"
-	"fmt"
-	"log/slog"
-	"os"
-	"regexp"
-	"strings"
 
 	"github.com/lrstanley/go-ytdlp"
 )
@@ -69,12 +70,10 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 	command := ytdlp.New().
 		// SetWorkDir(d.cfg.Dir.Downloads).
 		CacheDir(d.cfg.Dir.Cache).
-		// CookiesFromBrowser("firefox").
 		PresetAlias(job.Preset).
 		ProgressFunc(defaultProgressFreq, progressFn).
+		NoPlaylist().
 		PrintJSON().Print(defaultPrintAfterMove).
-		// DumpSingleJSON().
-		// NoSimulate().
 		Output(d.cfg.Dir.FilenameTemplate)
 
 	if d.cfg.Dir.CookieFile != "" {
