@@ -7,3 +7,4 @@ daunrodo
 .gitignore
 data/
 .env
+__debug_bin*
