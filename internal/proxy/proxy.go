@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	defaultSOCKSPort = "1080"
+	defaultHTTPPort  = "8080"
+)
+
 // Manager handles proxy selection and health checking.
 type Manager struct {
 	proxies       []string
@@ -62,10 +67,10 @@ func (m *Manager) GetProxy(ctx context.Context) (string, error) {
 		return m.selectRandom(), nil
 	}
 
-	// Try to find a healthy proxy
-	attempts := len(m.proxies)
-	for i := 0; i < attempts; i++ {
-		proxy := m.selectRandom()
+	// Try to find a healthy proxy - shuffle and try each once
+	indices := rand.Perm(len(m.proxies))
+	for _, idx := range indices {
+		proxy := m.proxies[idx]
 		if m.checkHealth(ctx, proxy) {
 			return proxy, nil
 		}
@@ -95,9 +100,9 @@ func (m *Manager) checkHealth(ctx context.Context, proxyURL string) bool {
 		// Add default port based on scheme
 		switch u.Scheme {
 		case "socks5", "socks5h":
-			host = host + ":1080"
+			host = host + ":" + defaultSOCKSPort
 		case "http", "https":
-			host = host + ":8080"
+			host = host + ":" + defaultHTTPPort
 		default:
 			return false
 		}
