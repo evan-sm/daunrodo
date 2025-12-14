@@ -10,6 +10,7 @@ Stop screenshoting, just ```daunrodo``` it!
 - [x] 🎨 **Media** supports videos, audios, playlists
 - [x] 🔄 **Autoinstall** `yt-dlp`, `ffmpeg` binaries installation are managed automatically
 - [x] 🚦 **Queue**. Requested downloads are enqueued, cached, cleaned (TTL) and progress (%, ETA) is tracked
+- [x] 🌐 **Proxy Support** SOCKS5h proxy support with health checking and random selection
 
 # ✅ TO DO
 - [ ] 🔀 **Failover** Failed downloads are tried again with native downloader or other tools like `gallery-dl`
@@ -42,6 +43,31 @@ Download file:
 ```shell
 wget localhost:8080/v1/files/<publication-uuid>
 ```
+
+# ⚙️ Configuration
+
+## Proxy Support
+Configure SOCKS5h proxies via environment variable:
+
+```shell
+# Single proxy
+DAUNRODO_PROXY_URLS="socks5h://127.0.0.1:1080"
+
+# Multiple proxies (comma-separated, randomly selected for each download)
+DAUNRODO_PROXY_URLS="socks5h://proxy1:1080,socks5h://proxy2:1080,socks5h://proxy3:1080"
+
+# Disable health checking (default: enabled)
+DAUNRODO_PROXY_HEALTH_CHECK=false
+
+# Configure health check timeout (default: 5s)
+DAUNRODO_PROXY_HEALTH_TIMEOUT=10s
+```
+
+Features:
+- **Multiple proxies**: Comma-separated list - one is randomly selected for each download
+- **Health checking**: Proxies are checked for connectivity before use (can be disabled)
+- **Protocol support**: socks5h://, socks5://, http://, https://
+- **Automatic failover**: If a proxy is unhealthy, another is selected automatically
 
 
 # 💪🏻 Motivation?
