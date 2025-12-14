@@ -121,3 +121,44 @@ func TestGetProxy_Random(t *testing.T) {
 		t.Errorf("GetProxy() returned no proxies")
 	}
 }
+
+func TestNew_IPv6(t *testing.T) {
+	tests := []struct {
+		name      string
+		proxyURLs string
+		wantCount int
+		wantErr   bool
+	}{
+		{
+			name:      "IPv6 with port",
+			proxyURLs: "socks5h://[::1]:1080",
+			wantCount: 1,
+			wantErr:   false,
+		},
+		{
+			name:      "IPv6 without port",
+			proxyURLs: "socks5h://[::1]",
+			wantCount: 1,
+			wantErr:   false,
+		},
+		{
+			name:      "mixed IPv4 and IPv6",
+			proxyURLs: "socks5h://127.0.0.1:1080,socks5h://[::1]:1080",
+			wantCount: 2,
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := proxy.New(tt.proxyURLs, true, 5*time.Second)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil && m.Count() != tt.wantCount {
+				t.Errorf("New() count = %v, want %v", m.Count(), tt.wantCount)
+			}
+		})
+	}
+}

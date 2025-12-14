@@ -96,16 +96,21 @@ func (m *Manager) checkHealth(ctx context.Context, proxyURL string) bool {
 
 	// Extract host and port
 	host := u.Host
-	if !strings.Contains(host, ":") {
-		// Add default port based on scheme
+	
+	// Check if port is already specified
+	_, _, err = net.SplitHostPort(host)
+	if err != nil {
+		// No port specified, add default based on scheme
+		var port string
 		switch u.Scheme {
 		case "socks5", "socks5h":
-			host = host + ":" + defaultSOCKSPort
+			port = defaultSOCKSPort
 		case "http", "https":
-			host = host + ":" + defaultHTTPPort
+			port = defaultHTTPPort
 		default:
 			return false
 		}
+		host = net.JoinHostPort(host, port)
 	}
 
 	// Create a context with timeout
