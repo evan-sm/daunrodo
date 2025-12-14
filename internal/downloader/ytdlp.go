@@ -47,6 +47,7 @@ func NewYTdlp(log *slog.Logger, cfg *config.Config) Downloader {
 	proxyMgr, err := proxy.New(cfg.Proxy.URLs, cfg.Proxy.HealthCheck, cfg.Proxy.HealthTimeout)
 	if err != nil {
 		log.Error("failed to initialize proxy manager", slog.Any("error", err))
+		// proxyMgr is nil when error is returned, but we continue without proxy support
 	}
 
 	if proxyMgr != nil && proxyMgr.Count() > 0 {
