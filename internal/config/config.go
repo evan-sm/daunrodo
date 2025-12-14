@@ -16,6 +16,7 @@ type Config struct {
 	Job     Job
 	Dir     Dir
 	Storage Storage
+	Proxy   Proxy
 }
 
 // App holds application-wide configuration.
@@ -34,6 +35,14 @@ type Job struct {
 type Storage struct {
 	TTL             time.Duration `env:"DAUNRODO_APP_STORAGE_TTL"              envDefault:"168h"`
 	CleanupInterval time.Duration `env:"DAUNRODO_APP_STORAGE_CLEANUP_INTERVAL" envDefault:"1h"`
+}
+
+// Proxy holds proxy configuration.
+type Proxy struct {
+	// Comma-separated list of proxy URLs (e.g., socks5h://127.0.0.1:1080,socks5h://127.0.0.1:1081)
+	URLs           string        `env:"DAUNRODO_PROXY_URLS"             envDefault:""`
+	HealthCheck    bool          `env:"DAUNRODO_PROXY_HEALTH_CHECK"     envDefault:"true"`
+	HealthTimeout  time.Duration `env:"DAUNRODO_PROXY_HEALTH_TIMEOUT"   envDefault:"5s"`
 }
 
 // HTTP holds HTTP server configuration.

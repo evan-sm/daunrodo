@@ -14,6 +14,7 @@ import (
 	"daunrodo/internal/consts"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/proxy"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/calc"
 	"daunrodo/pkg/gen"
@@ -36,15 +37,27 @@ var (
 
 // YTdlp represents a yt-dlp downloader.
 type YTdlp struct {
-	log *slog.Logger
-	cfg *config.Config
+	log          *slog.Logger
+	cfg          *config.Config
+	proxyManager *proxy.Manager
 }
 
 // NewYTdlp creates a new YTdlp downloader instance.
 func NewYTdlp(log *slog.Logger, cfg *config.Config) Downloader {
+	proxyMgr, err := proxy.New(cfg.Proxy.URLs, cfg.Proxy.HealthCheck, cfg.Proxy.HealthTimeout)
+	if err != nil {
+		log.Error("failed to initialize proxy manager", slog.Any("error", err))
+		proxyMgr = nil
+	}
+
+	if proxyMgr != nil && proxyMgr.Count() > 0 {
+		log.Info("proxy manager initialized", slog.Int("proxy_count", proxyMgr.Count()))
+	}
+
 	return &YTdlp{
-		log: log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderYTdlp)),
-		cfg: cfg,
+		log:          log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderYTdlp)),
+		cfg:          cfg,
+		proxyManager: proxyMgr,
 	}
 }
 
@@ -75,6 +88,17 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 		NoPlaylist().
 		PrintJSON().Print(defaultPrintAfterMove).
 		Output(d.cfg.Dir.FilenameTemplate)
+
+	// Get and set proxy if available
+	if d.proxyManager != nil && d.proxyManager.Count() > 0 {
+		proxyURL, err := d.proxyManager.GetProxy(ctx)
+		if err != nil {
+			log.WarnContext(ctx, "failed to get healthy proxy", slog.Any("error", err))
+		} else if proxyURL != "" {
+			log.InfoContext(ctx, "using proxy for download", slog.String("proxy", proxyURL))
+			command = command.Proxy(proxyURL)
+		}
+	}
 
 	if d.cfg.Dir.CookieFile != "" {
 		command = command.Cookies(d.cfg.Dir.CookieFile)
