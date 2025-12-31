@@ -47,17 +47,17 @@ func (j Job) LogValue() slog.Value {
 }
 
 // File represents a downloaded file.
-type File struct {
-	ID       string `json:"id"`
-	URL      string `json:"url"`
-	Filename string `json:"filename"`
-	Size     int64  `json:"size"`
-	MimeType string `json:"mimeType"`
-	Path     string `json:"path"`
-	Duration int    `json:"duration"` // Duration in seconds (for videos)
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
-}
+// type File struct {
+// 	ID       string `json:"id"`
+// 	URL      string `json:"url"`
+// 	Filename string `json:"filename"`
+// 	Size     int64  `json:"size"`
+// 	MimeType string `json:"mimeType"`
+// 	Path     string `json:"path"`
+// 	Duration int    `json:"duration"` // Duration in seconds (for videos)
+// 	Width    int    `json:"width"`
+// 	Height   int    `json:"height"`
+// }
 
 // Publication represents a social media publication/post.
 type Publication struct {
