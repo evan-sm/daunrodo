@@ -18,21 +18,25 @@ const (
 	JobStatusError JobStatus = "error"
 	// JobStatusFinished indicates that the job has finished successfully.
 	JobStatusFinished JobStatus = "finished"
+	// JobStatusCancelled indicates that the job was cancelled by the user.
+	JobStatusCancelled JobStatus = "cancelled"
 )
 
 // Job represents a download job.
 type Job struct {
-	UUID         string        `json:"uuid"`
-	URL          string        `json:"url"`
-	Preset       string        `json:"preset"`
-	Status       JobStatus     `json:"status"`
-	Progress     int           `json:"progress"`
-	Publications []Publication `json:"publications,omitempty"`
-	Error        string        `json:"error,omitempty"`
-	EstimatedETA time.Duration `json:"estimatedEta"`
-	CreatedAt    time.Time     `json:"createdAt"`
-	UpdatedAt    time.Time     `json:"updatedAt"`
-	ExpiresAt    time.Time     `json:"expiresAt"`
+	UUID          string        `json:"uuid"`
+	URL           string        `json:"url"`
+	Preset        string        `json:"preset"`
+	Status        JobStatus     `json:"status"`
+	Progress      int           `json:"progress"`
+	Publications  []Publication `json:"publications,omitempty"`
+	Error         string        `json:"error,omitempty"`
+	EstimatedETA  time.Duration `json:"estimatedEta"`
+	EstimatedSize int64         `json:"estimatedSize,omitempty"` // Estimated total file size in bytes
+	TotalSize     int64         `json:"totalSize,omitempty"`     // Actual total size after download
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
+	ExpiresAt     time.Time     `json:"expiresAt"`
 }
 
 // LogValue implements the slog.LogValuer interface for structured logging.
@@ -43,6 +47,8 @@ func (j Job) LogValue() slog.Value {
 		slog.String("status", string(j.Status)),
 		slog.Int("progress", j.Progress),
 		slog.Duration("estimatedEta", j.EstimatedETA),
+		slog.Int64("estimatedSize", j.EstimatedSize),
+		slog.Int64("totalSize", j.TotalSize),
 	)
 }
 

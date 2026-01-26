@@ -6,5 +6,6 @@ README.md
 daunrodo
 .gitignore
 data/
+bins/
 .env
 __debug_bin*

@@ -19,7 +19,7 @@ func TestRecoverer(t *testing.T) {
 	tests := []struct {
 		name       string
 		handler    http.HandlerFunc
-		wantPanic  interface{}
+		wantPanic  any
 		wantCalled bool
 		wantStatus int
 	}{
