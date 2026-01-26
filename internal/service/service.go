@@ -139,8 +139,20 @@ func (svc *Job) processJob(ctx context.Context, job *entity.Job) {
 	jobCtx, cancel := context.WithTimeout(ctx, svc.Cfg.Job.Timeout)
 	defer cancel()
 
+	// Register cancel function for job cancellation support
+	svc.Storer.RegisterCancelFunc(job.UUID, cancel)
+	defer svc.Storer.UnregisterCancelFunc(job.UUID)
+
 	err := svc.Downloader.Process(jobCtx, job, svc.Storer)
 	if err != nil {
+		// Check if it was cancelled
+		if jobCtx.Err() == context.Canceled {
+			log.InfoContext(ctx, "job cancelled", slog.Any("job_id", job.UUID))
+			svc.Storer.UpdateJobStatus(ctx, job, entity.JobStatusCancelled, 0, "job cancelled by user")
+
+			return
+		}
+
 		log.ErrorContext(ctx, "downloader process", slog.Any("error", err))
 		svc.Storer.UpdateJobStatus(ctx, job, entity.JobStatusError, 0, err.Error())
 

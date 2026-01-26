@@ -1,15 +1,18 @@
 # 🔗 daunrōdo - self-hosted `yt-dlp` http server
  > Daunrōdā, ダウンローダー - means <i>downloader</i> in Japanese
 
-Simple self-hosted HTTP API around [yt-dlp](https://github.com/lrstanley/go-ytdlp) to download media from links. Has autoupdates, queue, progress, cache, failover capabilities. No dependencies.
+Simple self-hosted HTTP API around [yt-dlp](https://github.com/yt-dlp/yt-dlp) to download media from links. Has autoupdates, queue, progress, cache, failover capabilities. No third-party Go dependencies.
 
 
 Stop screenshoting, just ```daunrodo``` it!
 
 # 🤩 Features
 - [x] 🎨 **Media** supports videos, audios, playlists
-- [x] 🔄 **Autoinstall** `yt-dlp`, `ffmpeg` binaries installation are managed automatically
+- [x] 🔄 **Autoinstall** `yt-dlp`, `ffmpeg`, `gallery-dl` binaries are managed automatically with SHA256 verification
 - [x] 🚦 **Queue**. Requested downloads are enqueued, cached, cleaned (TTL) and progress (%, ETA) is tracked
+- [x] 🌐 **Proxy Support**. SOCKS5h proxy rotation with health checking and failure tracking
+- [x] 📊 **Prometheus Metrics**. Full observability with jobs, downloads, proxy, and HTTP metrics
+- [x] ❌ **Job Cancellation**. Cancel in-progress downloads via API
 
 # ✅ TO DO
 - [ ] 🔀 **Failover** Failed downloads are tried again with native downloader or other tools like `gallery-dl`
@@ -41,6 +44,14 @@ curl -s localhost:8080/v1/jobs/
 Download file:
 ```shell
 wget localhost:8080/v1/files/<publication-uuid>
+```
+Cancel job:
+```shell
+curl -X DELETE localhost:8080/v1/jobs/<job-uuid>
+```
+Metrics (Prometheus):
+```shell
+curl localhost:8080/metrics
 ```
 
 

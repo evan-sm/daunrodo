@@ -5,96 +5,154 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"daunrodo/internal/config"
 	"daunrodo/internal/consts"
+	"daunrodo/internal/depmanager"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/proxymgr"
 	"daunrodo/internal/storage"
-	"daunrodo/pkg/calc"
 	"daunrodo/pkg/gen"
-	"daunrodo/pkg/maths"
-	"daunrodo/pkg/ptr"
-
-	"github.com/lrstanley/go-ytdlp"
 )
 
 const fullProgress = 100
+
+// Size estimation constants.
+const (
+	// mbPerMinuteAudio is the estimated MB per minute for audio files.
+	mbPerMinuteAudio = 1024 * 1024
+	// mbPerMinuteVideo is the estimated MB per minute for video files.
+	mbPerMinuteVideo = 10 * 1024 * 1024
+	// progressMinMatches is the minimum regex matches for progress parsing.
+	progressMinMatches = 2
+)
 
 var (
 	maxJSONSize = 10 * 1024 * 1024                                       // 10 MiB scanner buffer
 	bufSize     = 4096                                                   // 4 KiB buffer size
 	reFilepath  = regexp.MustCompile(`(?i)^[^\{\[\n].*\.[a-z0-9]{1,6}$`) // file path
 
+	// reProgress is the download progress regex: [download]  50.0%.
+	reProgress = regexp.MustCompile(`\[download\]\s+(\d+\.?\d*)%`)
+
 	// changing this may break parseYtdlpStdout().
 	defaultPrintAfterMove = "after_move:filepath"
 )
 
-// YTdlp represents a yt-dlp downloader.
+// YTdlp represents a yt-dlp downloader using the binary directly.
 type YTdlp struct {
-	log *slog.Logger
-	cfg *config.Config
+	log      *slog.Logger
+	cfg      *config.Config
+	depMgr   *depmanager.Manager
+	proxyMgr *proxymgr.Manager
 }
 
 // NewYTdlp creates a new YTdlp downloader instance.
-func NewYTdlp(log *slog.Logger, cfg *config.Config) Downloader {
+func NewYTdlp(
+	log *slog.Logger,
+	cfg *config.Config,
+	depMgr *depmanager.Manager,
+	proxyMgr *proxymgr.Manager,
+) Downloader {
 	return &YTdlp{
-		log: log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderYTdlp)),
-		cfg: cfg,
+		log:      log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderYTdlp)),
+		cfg:      cfg,
+		depMgr:   depMgr,
+		proxyMgr: proxyMgr,
 	}
 }
 
 // Process processes the download job and updates the job status in the storage.
 func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Storer) error {
 	if job == nil {
-		return fmt.Errorf("job is nil")
+		return errs.ErrJobNil
 	}
 
-	log := d.log
+	log := d.log.With(slog.Any("job", job))
 
 	storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, 0, "")
 
-	progressFn := func(prog ytdlp.ProgressUpdate) {
-		log.DebugContext(ctx, "ytdlp progress", "progress_update", ProgressUpdate{&prog})
-		storer.UpdateJobStatus(ctx,
-			job,
-			entity.JobStatusDownloading,
-			calc.Progress(prog.DownloadedBytes, prog.TotalBytes),
-			"")
-	}
-
-	command := ytdlp.New().
-		// SetWorkDir(d.cfg.Dir.Downloads).
-		CacheDir(d.cfg.Dir.Cache).
-		PresetAlias(job.Preset).
-		ProgressFunc(defaultProgressFreq, progressFn).
-		NoPlaylist().
-		PrintJSON().Print(defaultPrintAfterMove).
-		Output(d.cfg.Dir.FilenameTemplate)
-
-	if d.cfg.Dir.CookieFile != "" {
-		command = command.Cookies(d.cfg.Dir.CookieFile)
-	}
-
-	res, err := command.Run(ctx, job.URL)
+	// Get estimated file size before downloading
+	estimatedSize, err := d.getEstimatedSize(ctx, job.URL, job.Preset)
 	if err != nil {
-		log.Error("ytdlp run", slog.Any("error", err), slog.Any("result", Result{res}))
-
-		return fmt.Errorf("ytdlp process: %w", err)
+		log.WarnContext(ctx, "failed to get estimated size", slog.Any("error", err))
+	} else {
+		job.EstimatedSize = estimatedSize
 	}
 
-	info, err := res.GetExtractedInfo()
+	// Build command arguments
+	args := d.buildArgs(job)
+
+	// Get binary path
+	binPath := d.depMgr.GetInstalledPath(depmanager.BinaryYTdlp)
+	if binPath == "" {
+		binPath = d.depMgr.GetBinaryPath(depmanager.BinaryYTdlp)
+	}
+
+	log.DebugContext(ctx, "executing yt-dlp", slog.String("binary", binPath), slog.Any("args", args))
+
+	cmd := exec.CommandContext(ctx, binPath, args...)
+
+	// Set up pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.ErrorContext(ctx, "ytdlp get extracted info", slog.Any("error", err))
+		return fmt.Errorf("stdout pipe: %w", err)
 	}
 
-	job.Publications, err = ComposePublications(info, res.Stdout)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start command: %w", err)
+	}
+
+	var (
+		stdoutBuf strings.Builder
+		stderrBuf strings.Builder
+		waitGrp   sync.WaitGroup
+	)
+
+	// Read stdout (JSON output)
+	waitGrp.Go(func() {
+		io.Copy(&stdoutBuf, stdout)
+	})
+
+	// Read stderr (progress updates)
+	waitGrp.Go(func() {
+		d.handleProgress(ctx, stderr, &stderrBuf, job, storer)
+	})
+
+	waitGrp.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		log.ErrorContext(ctx, "yt-dlp command failed",
+			slog.Any("error", err),
+			slog.String("stderr", stderrBuf.String()))
+
+		return fmt.Errorf("yt-dlp process: %w", err)
+	}
+
+	// Parse results
+	job.Publications, err = d.composePublications(stdoutBuf.String())
 	if err != nil {
 		return fmt.Errorf("compose publications: %w", err)
+	}
+
+	// Calculate total size
+	for _, pub := range job.Publications {
+		job.TotalSize += pub.FileSize
 	}
 
 	log.InfoContext(ctx, "publications composed", "publications", job.Publications)
@@ -105,12 +163,202 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 
 	storer.UpdateJobStatus(ctx, job, entity.JobStatusFinished, fullProgress, "")
 
-	log.InfoContext(ctx, "done", "result", Result{res})
+	log.InfoContext(ctx, "done")
 
-	return err
+	return nil
 }
 
-// ParseYtdlpStdout parses the stdout of yt-dlp and returns a slice of ResultJSON with their filenames.
+// GetEstimatedSize fetches format information and estimates the file size.
+func (d *YTdlp) getEstimatedSize(ctx context.Context, url, preset string) (int64, error) {
+	binPath := d.depMgr.GetInstalledPath(depmanager.BinaryYTdlp)
+	if binPath == "" {
+		binPath = d.depMgr.GetBinaryPath(depmanager.BinaryYTdlp)
+	}
+
+	args := []string{
+		"-F", "--no-playlist", "-J",
+		url,
+	}
+
+	cmd := exec.CommandContext(ctx, binPath, args...)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("get formats: %w", err)
+	}
+
+	var info struct {
+		Formats []struct {
+			FormatID       string `json:"format_id"`
+			Filesize       int64  `json:"filesize"`
+			FilesizeApprox int64  `json:"filesize_approx"`
+		} `json:"formats"`
+		Duration float64 `json:"duration"`
+	}
+
+	if err := json.Unmarshal(output, &info); err != nil {
+		return 0, fmt.Errorf("parse formats: %w", err)
+	}
+
+	// Estimate based on preset or use largest format
+	var maxSize int64
+
+	for _, f := range info.Formats {
+		size := f.Filesize
+		if size == 0 {
+			size = f.FilesizeApprox
+		}
+
+		if size > maxSize {
+			maxSize = size
+		}
+	}
+
+	// If we have duration but no filesize, estimate based on bitrate
+	if maxSize == 0 && info.Duration > 0 {
+		// Assume ~1MB per minute for audio, ~10MB per minute for video
+		switch preset {
+		case "mp3", "aac", "audio":
+			maxSize = int64(info.Duration / 60 * mbPerMinuteAudio)
+		default:
+			maxSize = int64(info.Duration / 60 * mbPerMinuteVideo)
+		}
+	}
+
+	return maxSize, nil
+}
+
+func (d *YTdlp) buildArgs(job *entity.Job) []string {
+	args := []string{
+		"--cache-dir", d.cfg.Dir.Cache,
+		"--no-playlist",
+		"--print-json",
+		"--print", defaultPrintAfterMove,
+		"-o", d.cfg.Dir.FilenameTemplate,
+		"--progress",
+		"--newline",
+	}
+
+	// Add preset/format
+	if job.Preset != "" {
+		args = append(args, "-t", job.Preset)
+	}
+
+	// Add cookies if configured
+	if d.cfg.Dir.CookieFile != "" {
+		args = append(args, "--cookies", d.cfg.Dir.CookieFile)
+	}
+
+	// Add proxy if available
+	if d.proxyMgr != nil && d.proxyMgr.HasProxies() {
+		proxy := d.proxyMgr.GetRandomProxy()
+		if proxy != "" {
+			args = append(args, "--proxy", proxy)
+		}
+	}
+
+	// Add URL
+	args = append(args, job.URL)
+
+	return args
+}
+
+// ParseProgress extracts the progress percentage from a yt-dlp stderr line.
+// Returns the progress percentage and true if found, 0 and false otherwise.
+func ParseProgress(line string) (float64, bool) {
+	matches := reProgress.FindStringSubmatch(line)
+	if len(matches) < progressMinMatches {
+		return 0, false
+	}
+
+	progress, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return progress, true
+}
+
+func (d *YTdlp) handleProgress(
+	ctx context.Context,
+	reader io.Reader,
+	stderrBuf *strings.Builder,
+	job *entity.Job,
+	storer storage.Storer,
+) {
+	scanner := bufio.NewScanner(reader)
+	lastUpdate := time.Now()
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		stderrBuf.WriteString(line)
+		stderrBuf.WriteString("\n")
+
+		// Parse progress
+		progress, ok := ParseProgress(line)
+		if !ok {
+			continue
+		}
+
+		// Rate limit updates
+		if time.Since(lastUpdate) < defaultProgressFreq {
+			continue
+		}
+
+		lastUpdate = time.Now()
+
+		d.log.DebugContext(ctx, "download progress", slog.Float64("progress", progress))
+		storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, int(progress), "")
+	}
+}
+
+func (d *YTdlp) composePublications(stdout string) ([]entity.Publication, error) {
+	results, err := ParseYtdlpStdout(stdout)
+	if err != nil {
+		return nil, fmt.Errorf("parse yt-dlp stdout: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no results parsed from stdout")
+	}
+
+	publications := make([]entity.Publication, 0, len(results))
+
+	for _, res := range results {
+		var fileSize int64
+
+		if res.Filename != "" {
+			fileInfo, err := os.Stat(res.Filename)
+			if err == nil {
+				fileSize = fileInfo.Size()
+			}
+		}
+
+		pub := entity.Publication{
+			UUID:         gen.UUIDv5(res.ID, res.Filename),
+			ID:           res.ID,
+			Type:         res.Type,
+			Platform:     res.Extractor,
+			Channel:      res.Channel,
+			Author:       res.Uploader,
+			Description:  res.Description,
+			WebpageURL:   res.WebpageURL,
+			Title:        res.Title,
+			ViewCount:    parseViewCount(res.ViewCount),
+			LikeCount:    res.LikeCount,
+			ThumbnailURL: getThumbnail(res),
+			FileSize:     fileSize,
+			Duration:     res.Timestamp,
+			Filename:     res.Filename,
+		}
+
+		publications = append(publications, pub)
+	}
+
+	return publications, nil
+}
+
+// ParseYtdlpStdout parses the stdout of yt-dlp and returns a slice of ResultJSON with filenames.
 func ParseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 	scanner := bufio.NewScanner(strings.NewReader(stdout))
 	scanner.Buffer(make([]byte, bufSize), maxJSONSize)
@@ -149,68 +397,6 @@ func ParseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 	return res, nil
 }
 
-// ComposePublications composes a slice of entity.Publication from the extracted info and yt-dlp stdout.
-func ComposePublications(info []*ytdlp.ExtractedInfo, ytdlpStdout string) ([]entity.Publication, error) {
-	if info == nil {
-		return nil, fmt.Errorf("info is nil")
-	}
-
-	results, err := ParseYtdlpStdout(ytdlpStdout)
-	if err != nil {
-		return nil, fmt.Errorf("parse yt-dlp stdout: %w", err)
-	}
-
-	if len(info) != len(results) {
-		return nil, fmt.Errorf("info and results len mismatch: %d != %d", len(info), len(results))
-	}
-
-	resultsMap := make(map[string]ResultJSON, len(results))
-
-	for _, res := range results {
-		resultsMap[res.ID] = res
-	}
-
-	publications := make([]entity.Publication, 0, len(info))
-
-	for _, inf := range info {
-		var fileSize int64
-
-		filename := resultsMap[inf.ID].Filename
-
-		fileInfo, err := os.Stat(filename)
-		if err != nil && filename != "/tmp/first.mp4" {
-			return nil, fmt.Errorf("stat file %q: %w", filename, err)
-		}
-
-		if fileInfo != nil {
-			fileSize = fileInfo.Size()
-		}
-
-		publications = append(publications, entity.Publication{
-			UUID:         gen.UUIDv5(inf.ID, resultsMap[inf.ID].Filename),
-			ID:           inf.ID,
-			Type:         string(inf.Type),
-			Platform:     ptr.Deref(inf.Extractor),
-			Channel:      ptr.Deref(inf.Channel),
-			Author:       resultsMap[inf.ID].Uploader,
-			Description:  resultsMap[inf.ID].Description,
-			WebpageURL:   ptr.Deref(inf.WebpageURL),
-			Title:        ptr.Deref(inf.Title),
-			ViewCount:    maths.RoundFloat64ToInt(ptr.Deref(inf.ViewCount)),
-			LikeCount:    maths.RoundFloat64ToInt(ptr.Deref(inf.LikeCount)),
-			ThumbnailURL: ptr.Deref(inf.Thumbnail),
-			// FileSize:     fileInfo.Size(),
-			FileSize: fileSize,
-			Duration: maths.RoundFloat64ToInt(ptr.Deref(inf.Duration)),
-			Width:    maths.RoundFloat64ToInt(ptr.Deref(inf.Width)),
-			Height:   maths.RoundFloat64ToInt(ptr.Deref(inf.Height)),
-			Filename: filename,
-		})
-	}
-
-	return publications, nil
-}
-
 func storePublications(ctx context.Context, job *entity.Job, storer storage.Storer) error {
 	if job == nil {
 		return errs.ErrJobNil
@@ -223,4 +409,27 @@ func storePublications(ctx context.Context, job *entity.Job, storer storage.Stor
 	}
 
 	return nil
+}
+
+func parseViewCount(v any) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case float64:
+		return int(val)
+	case string:
+		i, _ := strconv.Atoi(val)
+
+		return i
+	default:
+		return 0
+	}
+}
+
+func getThumbnail(res ResultJSON) string {
+	if len(res.Entries) > 0 {
+		return res.Entries[0].Thumbnail
+	}
+
+	return ""
 }

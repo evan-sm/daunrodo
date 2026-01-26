@@ -24,6 +24,15 @@ type Storer interface {
 	SetPublication(ctx context.Context, jobID string, publication *entity.Publication) error
 	GetPublicationByID(ctx context.Context, id string) (*entity.Publication, error)
 
+	// CancelJob cancels a job by its ID.
+	CancelJob(ctx context.Context, jobID string) error
+
+	// RegisterCancelFunc stores a cancel function for a job.
+	RegisterCancelFunc(jobID string, cancelFunc context.CancelFunc)
+
+	// UnregisterCancelFunc removes the cancel function for a job.
+	UnregisterCancelFunc(jobID string)
+
 	CleanupExpiredJobs(ctx context.Context, interval time.Duration)
 }
 
@@ -34,6 +43,9 @@ type storage struct {
 	mu           sync.RWMutex
 	jobs         map[string]*entity.Job         // job UUID : job
 	publications map[string]*entity.Publication // publication UUID : publication
+
+	cancelMu    sync.RWMutex
+	cancelFuncs map[string]context.CancelFunc // job UUID : cancel func
 }
 
 // New creates a new in-memory storage instance.
@@ -43,7 +55,9 @@ func New(ctx context.Context, log *slog.Logger, cfg *config.Config) Storer {
 		cfg:          cfg,
 		jobs:         make(map[string]*entity.Job),
 		publications: make(map[string]*entity.Publication),
+		cancelFuncs:  make(map[string]context.CancelFunc),
 		mu:           sync.RWMutex{},
+		cancelMu:     sync.RWMutex{},
 	}
 
 	go storage.CleanupExpiredJobs(ctx, cfg.Storage.CleanupInterval)
@@ -174,4 +188,63 @@ func (stg *storage) GetPublicationByID(_ context.Context, id string) (*entity.Pu
 	}
 
 	return pub, nil
+}
+
+// CancelJob cancels a job by its ID by calling its cancel function.
+func (stg *storage) CancelJob(ctx context.Context, jobID string) error {
+	stg.mu.RLock()
+	job := stg.jobs[jobID]
+	stg.mu.RUnlock()
+
+	if job == nil {
+		return errs.ErrJobNotFound
+	}
+
+	// Check if job is in a cancellable state
+	if job.Status == entity.JobStatusFinished ||
+		job.Status == entity.JobStatusError ||
+		job.Status == entity.JobStatusCancelled {
+		return errs.ErrJobCancelled
+	}
+
+	// Get and call the cancel function
+	stg.cancelMu.RLock()
+	cancelFunc := stg.cancelFuncs[jobID]
+	stg.cancelMu.RUnlock()
+
+	if cancelFunc == nil {
+		stg.log.WarnContext(ctx, "no cancel func registered for job", slog.String("job_id", jobID))
+
+		return errs.ErrJobCancelled
+	}
+
+	cancelFunc()
+
+	// Update job status
+	stg.mu.Lock()
+
+	job.Status = entity.JobStatusCancelled
+	job.UpdatedAt = time.Now()
+
+	stg.mu.Unlock()
+
+	stg.log.InfoContext(ctx, "job cancelled", slog.String("job_id", jobID))
+
+	return nil
+}
+
+// RegisterCancelFunc stores a cancel function for a job.
+func (stg *storage) RegisterCancelFunc(jobID string, cancelFunc context.CancelFunc) {
+	stg.cancelMu.Lock()
+	defer stg.cancelMu.Unlock()
+
+	stg.cancelFuncs[jobID] = cancelFunc
+}
+
+// UnregisterCancelFunc removes the cancel function for a job.
+func (stg *storage) UnregisterCancelFunc(jobID string) {
+	stg.cancelMu.Lock()
+	defer stg.cancelMu.Unlock()
+
+	delete(stg.cancelFuncs, jobID)
 }

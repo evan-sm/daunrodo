@@ -1,13 +1,10 @@
 package downloader_test
 
 import (
-	"daunrodo/internal/downloader"
-	"daunrodo/internal/entity"
-	"daunrodo/pkg/ptr"
 	_ "embed"
 	"testing"
 
-	"github.com/lrstanley/go-ytdlp"
+	"daunrodo/internal/downloader"
 )
 
 //go:embed testdata/ytdlp_stdout_single_json_line.json
@@ -19,7 +16,7 @@ var ytdlpStdoutSingleJSONLineAndFilepath string
 //go:embed testdata/ytdlp_stdout_multiple_json_lines_and_random_lines.json
 var ytdlpStdoutMultipleJSONLinesAndRandomLines string
 
-func Test_parseYtdlpStdout(t *testing.T) {
+func TestParseYtdlpStdout(t *testing.T) {
 	tests := []struct {
 		name    string
 		stdout  string
@@ -49,123 +46,85 @@ func Test_parseYtdlpStdout(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := downloader.ParseYtdlpStdout(tt.stdout)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, gotErr := downloader.ParseYtdlpStdout(tc.stdout)
 			if gotErr != nil {
-				if !tt.wantErr {
+				if !tc.wantErr {
 					t.Errorf("ParseYtdlpStdout() failed: %v", gotErr)
 				}
 
 				return
 			}
 
-			if tt.wantErr {
+			if tc.wantErr {
 				t.Fatal("ParseYtdlpStdout() succeeded unexpectedly")
 			}
 
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d results, want %d", len(got), len(tc.want))
+			}
+
 			for idx, result := range got {
-				if result.Title != tt.want[idx].Title {
-					t.Errorf("got = %v, want %v", result.Title, tt.want[idx].Title)
+				if result.Title != tc.want[idx].Title {
+					t.Errorf("got Title = %q, want %q", result.Title, tc.want[idx].Title)
 				}
 
-				if result.ID != tt.want[idx].ID {
-					t.Errorf("got = %v, want %v", result.ID, tt.want[idx].ID)
+				if result.ID != tc.want[idx].ID {
+					t.Errorf("got ID = %q, want %q", result.ID, tc.want[idx].ID)
 				}
 
-				if result.Filename != tt.want[idx].Filename {
-					t.Errorf("got = %v, want %v", result.Filename, tt.want[idx].Filename)
+				if result.Filename != tc.want[idx].Filename {
+					t.Errorf("got Filename = %q, want %q", result.Filename, tc.want[idx].Filename)
 				}
 			}
 		})
 	}
 }
 
-func Test_composePublications(t *testing.T) {
-	info1 := &ytdlp.ExtractedInfo{
-		ID:       "one",
-		Title:    ptr.Of("First"),
-		Filename: ptr.Of("/tmp/first.mp4"),
-		ExtractedFormat: &ytdlp.ExtractedFormat{
-			Width:  ptr.Of(1920.0),
-			Height: ptr.Of(1080.0),
-		},
-	}
-
-	info2 := &ytdlp.ExtractedInfo{
-		ID:       "two",
-		Title:    ptr.Of("Second"),
-		Filename: ptr.Of("/tmp/second.mp4"),
-		ExtractedFormat: &ytdlp.ExtractedFormat{
-			Width:  ptr.Of(1920.0),
-			Height: ptr.Of(1080.0),
-		},
-	}
-
+func TestParseProgress(t *testing.T) {
 	tests := []struct {
-		name        string
-		info        []*ytdlp.ExtractedInfo
-		ytdlpStdout string
-		want        []entity.Publication
-		wantErr     bool
+		name     string
+		line     string
+		wantProg float64
+		wantOK   bool
 	}{
 		{
-			name:        "test1",
-			info:        []*ytdlp.ExtractedInfo{info1},
-			ytdlpStdout: ytdlpStdoutSingleJSONLine,
-			want: []entity.Publication{
-				{
-					ID:       "one",
-					Title:    "First",
-					Filename: "/tmp/first.mp4",
-				},
-			},
+			name:     "standard progress",
+			line:     "[download]  50.0% of  100.00MiB at  10.00MiB/s ETA 00:05",
+			wantProg: 50.0,
+			wantOK:   true,
 		},
 		{
-			name:        "test2",
-			info:        []*ytdlp.ExtractedInfo{info1, info2},
-			ytdlpStdout: ytdlpStdoutMultipleJSONLinesAndRandomLines,
-			want: []entity.Publication{
-				{
-					ID:       "one",
-					Title:    "First",
-					Filename: "/tmp/first.mp4",
-				},
-				{
-					ID:       "two",
-					Title:    "Second",
-					Filename: "/tmp/first.mp4",
-				},
-			},
+			name:     "100 percent",
+			line:     "[download] 100% of 50.00MiB in 00:05",
+			wantProg: 100.0,
+			wantOK:   true,
+		},
+		{
+			name:     "no percentage",
+			line:     "[youtube] Extracting URL: https://youtube.com/watch?v=abc",
+			wantProg: 0,
+			wantOK:   false,
+		},
+		{
+			name:     "decimal percentage",
+			line:     "[download]   5.5% of ~  50.00MiB at  10.00MiB/s ETA 00:30",
+			wantProg: 5.5,
+			wantOK:   true,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			publications, err := downloader.ComposePublications(tt.info, tt.ytdlpStdout)
-			if err != nil {
-				if !tt.wantErr {
-					t.Errorf("composePublications() failed: %v", err)
-				}
 
-				return
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := downloader.ParseProgress(tc.line)
+			if ok != tc.wantOK {
+				t.Errorf("ParseProgress() ok = %v, want %v", ok, tc.wantOK)
 			}
 
-			if tt.wantErr {
-				t.Fatal("composePublications() succeeded unexpectedly")
-			}
-
-			for idx, publication := range publications {
-				if publication.ID != tt.want[idx].ID {
-					t.Errorf("got = %v, want %v", publication.ID, tt.want[idx].ID)
-				}
-
-				if publication.Title != tt.want[idx].Title {
-					t.Errorf("got = %v, want %v", publication.Title, tt.want[idx].Title)
-				}
-
-				if publication.Filename != tt.want[idx].Filename {
-					t.Errorf("got = %v, want %v", publication.Filename, tt.want[idx].Filename)
-				}
+			if ok && got != tc.wantProg {
+				t.Errorf("ParseProgress() = %v, want %v", got, tc.wantProg)
 			}
 		})
 	}

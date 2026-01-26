@@ -44,6 +44,10 @@ const (
 	RespJobNotFound = "job not found"
 	// RespJobAlreadyExists is returned when a job already exists.
 	RespJobAlreadyExists = "job already exists"
+	// RespJobCancelled is returned when a job is cancelled.
+	RespJobCancelled = "job cancelled"
+	// RespJobCancelFailed is returned when job cancellation fails.
+	RespJobCancelFailed = "job cancellation failed"
 	// RespPublicationNotFound is returned when a publication is not found.
 	RespPublicationNotFound = "publication not found"
 	// RespPublicationDownloadFailed is returned when a publication download fails.
@@ -54,6 +58,8 @@ const (
 const (
 	// DownloaderYTdlp is the youtube-dl downloader identifier.
 	DownloaderYTdlp = "ytdlp"
+	// DownloaderGalleryDL is the gallery-dl downloader identifier.
+	DownloaderGalleryDL = "gallery-dl"
 	// DownloaderNative is the native downloader identifier.
 	DownloaderNative = "native"
 	// DownloaderMock is the mock downloader identifier for testing.
