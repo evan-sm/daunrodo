@@ -179,6 +179,17 @@ DAUNRODO_DIR_COOKIE_FILE=./data/cookies/cookies.txt  # Cookie file path (optiona
 # Storage
 DAUNRODO_APP_STORAGE_TTL=168h                  # Time-to-live for stored jobs (7 days)
 DAUNRODO_APP_STORAGE_CLEANUP_INTERVAL=1h       # Cleanup interval
+
+# Binary Dependency Manager
+DAUNRODO_DEPMANAGER_BINS_DIR=./bin             # Directory for downloaded binaries
+DAUNRODO_DEPMANAGER_LAZY_DOWNLOAD=false        # Lazy-load binaries on first use
+DAUNRODO_DEPMANAGER_UPDATE_INTERVAL=24h        # Check for binary updates interval
+
+# Proxy Configuration
+DAUNRODO_PROXY_LIST=socks5h://proxy1:1080,socks5h://proxy2:1080  # Comma-separated proxy list
+DAUNRODO_PROXY_MAX_FAILURES=3                  # Failures before proxy is marked unavailable
+DAUNRODO_PROXY_FAILURE_BACKOFF=5m              # Backoff time after failures
+DAUNRODO_PROXY_HEALTH_CHECK_INTERVAL=1m        # Health check interval (0 to disable)
 ```
 
 ### Example `.env` File
@@ -188,6 +199,10 @@ DAUNRODO_HTTP_PORT=:8080
 DAUNRODO_DIR_DOWNLOAD=./data/downloads
 DAUNRODO_DIR_CACHE=./data/cache
 DAUNRODO_DIR_COOKIE_FILE=./data/cookies/cookies.txt
+
+# Proxy rotation (optional)
+DAUNRODO_PROXY_LIST=socks5h://myproxy:1080
+DAUNRODO_PROXY_HEALTH_CHECK_INTERVAL=5m
 ```
 
 ## 📁 Project Structure
@@ -197,7 +212,15 @@ daunrodo/
 ├── internal/
 │   ├── config/          # Configuration management
 │   ├── consts/          # Application constants
-│   ├── downloader/      # Downloader implementations (yt-dlp, gallery-dl, hybrid)
+│   ├── depmanager/      # Binary dependency management (yt-dlp, ffmpeg, gallery-dl)
+│   ├── downloader/      # Downloader implementations (yt-dlp, gallery-dl)
+│   ├── entity/          # Domain entities (Job, Publication, etc.)
+│   ├── errs/            # Error definitions
+│   ├── infrastructure/  # Infrastructure layer (HTTP, middleware)
+│   ├── observability/   # Prometheus metrics
+│   ├── proxymgr/        # Proxy rotation and health checking
+│   ├── service/         # Business logic
+│   └── storage/         # Storage layer (in-memory with TTL)
 │   ├── entity/          # Domain entities (Job, Publication, etc.)
 │   ├── errs/            # Error definitions
 │   ├── infrastructure/  # Infrastructure layer (HTTP, middleware)
@@ -359,12 +382,14 @@ docker run -it --rm \
 ### Go Dependencies
 - `github.com/caarlos0/env/v11` - Environment variable parsing
 - `github.com/google/uuid` - UUID generation
-- `github.com/lrstanley/go-ytdlp` - yt-dlp Go wrapper
+- `github.com/prometheus/client_golang` - Prometheus metrics
 
-### System Dependencies
-- **yt-dlp** - Auto-installed by `go-ytdlp` library
-- **ffmpeg** - Required for video processing
-- **gallery-dl** - For Instagram/TikTok image/slide downloads (Python package)
+### System Dependencies (Auto-managed)
+The following binaries are automatically downloaded, verified (SHA256), and managed:
+- **yt-dlp** - Video/audio downloader
+- **ffmpeg** - Video processing
+- **ffprobe** - Media info extraction
+- **gallery-dl** - Image gallery downloader (TikTok slideshows, etc.)
 
 ## 🔄 Updating Dependencies
 
@@ -376,9 +401,12 @@ go mod tidy
 
 ### Update Specific Dependency
 ```bash
-go get -u github.com/lrstanley/go-ytdlp@latest
+go get -u github.com/prometheus/client_golang@latest
 go mod tidy
 ```
+
+### Binary Dependencies
+Binary dependencies (yt-dlp, ffmpeg, gallery-dl) are automatically updated based on `DAUNRODO_DEPMANAGER_UPDATE_INTERVAL`. You can also manually trigger updates by restarting the service.
 
 ## 📝 Code Style
 

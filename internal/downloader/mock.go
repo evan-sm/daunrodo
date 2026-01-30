@@ -37,22 +37,22 @@ func (m *mock) Process(ctx context.Context, job *entity.Job, storer storage.Stor
 
 	log := m.log.With(slog.Any("job", job))
 
-	storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, 0, "")
+	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, 0, "")
 
 	progressFn := func(prog ProgressUpdateMock) {
 		log.InfoContext(ctx, "job progress", slog.Int("progress", prog.Progress), slog.String("eta", prog.ETA))
-		storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, prog.Progress, "")
+		storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, prog.Progress, "")
 	}
 
 	err := simulateDownload(ctx, consts.DefaultSimulateTime, progressFn)
 	if err != nil {
 		log.Error("simulate download", slog.Any("error", err))
-		storer.UpdateJobStatus(ctx, job, entity.JobStatusError, 0, err.Error())
+		storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusError, 0, err.Error())
 
 		return err
 	}
 
-	storer.UpdateJobStatus(ctx, job, entity.JobStatusFinished, fullProgress, "")
+	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusFinished, fullProgress, "")
 
 	log.InfoContext(ctx, "processing job")
 

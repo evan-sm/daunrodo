@@ -6,21 +6,20 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"daunrodo/internal/config"
+	"daunrodo/internal/depmanager"
 	"daunrodo/internal/downloader"
 	httprouter "daunrodo/internal/infrastructure/delivery/http"
+	"daunrodo/internal/proxymgr"
 	"daunrodo/internal/service"
 	"daunrodo/internal/storage"
 	httpserver "daunrodo/pkg/http/server"
 	"daunrodo/pkg/logger"
-
-	"github.com/lrstanley/go-ytdlp"
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	cfg, err := config.New()
@@ -38,15 +37,26 @@ func main() {
 		slog.WarnContext(ctx, "logger level invalid; defaulting to info", slog.Any("error", err))
 	}
 
-	log.InfoContext(ctx, "checking if yt-dlp, ffmpeg, ffprobe isn't installed yet. it may take some time...")
-	// If yt-dlp, ffmpeg, ffprobe isn't installed yet, download and cache it for further use.
-	ytdlp.MustInstallAll(ctx)
+	depMgr := depmanager.New(log, cfg)
 
-	downloader := downloader.NewYTdlp(log, cfg)
+	log.InfoContext(ctx, "checking if yt-dlp, gallery-dl, deno are installed. it may take some time...")
+
+	depMgr.Start(ctx)
+
+	// Initialize proxy manager (can be nil if no proxies configured)
+	var proxyMgr *proxymgr.Manager
+	if len(cfg.Proxy.Proxies) > 0 {
+		proxyMgr = proxymgr.New(log, cfg)
+		go proxyMgr.StartHealthChecker(ctx)
+
+		log.InfoContext(ctx, "proxy manager initialized", slog.Int("proxy_count", len(cfg.Proxy.Proxies)))
+	}
+
+	dl := downloader.NewYTdlp(log, cfg, depMgr, proxyMgr)
 	storer := storage.New(ctx, log, cfg)
 
 	// Service
-	svc := service.New(cfg, log, downloader, storer)
+	svc := service.New(cfg, log, dl, storer)
 
 	// HTTP Server
 	router := httprouter.New(log, cfg, svc, storer)

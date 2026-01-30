@@ -109,6 +109,11 @@ func NotFound(w http.ResponseWriter, message string, err error) {
 	WriteJSON(w, http.StatusNotFound, message, nil, err)
 }
 
+// Conflict sends a 409 Conflict response with the provided message and error.
+func Conflict(w http.ResponseWriter, message string, err error) {
+	WriteJSON(w, http.StatusConflict, message, nil, err)
+}
+
 // UnprocessableEntity sends a 422 Unprocessable Entity response with the provided message and error.
 func UnprocessableEntity(w http.ResponseWriter, message string, err error) {
 	WriteJSON(w, http.StatusUnprocessableEntity, message, nil, err)

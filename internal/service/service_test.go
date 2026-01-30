@@ -151,8 +151,8 @@ func TestStartAndEnqueue(t *testing.T) {
 					}
 				}
 
-				job := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
-				if job != nil && job.Status != entity.JobStatusStarting {
+				job, exists := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+				if exists && job.Status != entity.JobStatusStarting {
 					t.Errorf("expected job to be started")
 				}
 
@@ -212,15 +212,15 @@ func TestWorker(t *testing.T) {
 				<-ctx.Done()
 				synctest.Wait()
 
-				job = svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
-				if job == nil {
+				storedJob, exists := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+				if !exists {
 					t.Fatalf("failed to get job")
 				}
 
 				if tc.expectDeadline {
-					assertJobDeadline(t, job, tc.expectStatus, tc.expectProgress, ctx.Err())
+					assertJobDeadline(t, &storedJob, tc.expectStatus, tc.expectProgress, ctx.Err())
 				} else {
-					assertJobFinished(t, job, tc.expectStatus)
+					assertJobFinished(t, &storedJob, tc.expectStatus)
 				}
 			})
 		})
@@ -367,22 +367,26 @@ func TestEnqueue(t *testing.T) {
 		t.Errorf("failed to enqueue job: %v", err)
 	}
 
-	got := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
-	if got == nil && job.Status != entity.JobStatusStarting {
+	_, exists := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+	if !exists {
+		t.Errorf("expected job to be found")
+	}
+
+	if exists && job.Status != entity.JobStatusStarting {
 		t.Errorf("expected job to be started")
 	}
 
-	if got != job {
-		t.Errorf("expected job pointer to be the same")
+	_, exists = svc.Storer.GetJobByID(ctx, job.UUID)
+	if !exists {
+		t.Errorf("expected job to be found")
 	}
 
-	got = svc.Storer.GetJobByID(ctx, job.UUID)
-	if got == nil && job.Status != entity.JobStatusStarting {
+	if exists && job.Status != entity.JobStatusStarting {
 		t.Errorf("expected job to be started")
 	}
 
-	job = svc.Storer.GetJobByURLAndPreset(ctx, testURL2, testPresetMP4)
-	if job != nil {
+	_, exists = svc.Storer.GetJobByURLAndPreset(ctx, testURL2, testPresetMP4)
+	if exists {
 		t.Errorf("expected error for non-existent job, got: %v", err)
 	}
 }

@@ -149,7 +149,7 @@ func (ro *Router) SetRoutesJob() {
 	jobRouter.HandleFunc("POST /enqueue", ro.Enqueue)
 	jobRouter.HandleFunc("GET /", ro.GetJobs)
 	jobRouter.HandleFunc("GET /{id}", ro.GetJob)
-	// jobRouter.HandleFunc("DELETE /{id}/cancel", ro.CancelJob)
+	jobRouter.HandleFunc("DELETE /{id}", ro.CancelJob)
 
 	ro.Handle("/v1/jobs/", http.StripPrefix("/v1/jobs", jobRouter))
 }
@@ -219,8 +219,8 @@ func (ro *Router) GetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job := ro.storer.GetJobByID(ctx, jobID)
-	if job == nil {
+	job, ok := ro.storer.GetJobByID(ctx, jobID)
+	if !ok {
 		log.ErrorContext(ctx, consts.RespJobNotFound)
 		response.NoContent(w)
 
@@ -255,24 +255,47 @@ func (ro *Router) GetJobs(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, consts.RespJobsRetrieved, jobs, nil)
 }
 
-// CancelJob handles job cancellation requests
-// func (ro *Router) CancelJob(w http.ResponseWriter, r *http.Request) {
-// ctx := r.Context()
+// CancelJob handles job cancellation requests.
+func (ro *Router) CancelJob(w http.ResponseWriter, r *http.Request) {
+	log := ro.log.With("handler", "CancelJob")
 
-// r.PathValue("job_id")
+	ctx, cancel := context.WithTimeout(r.Context(), consts.DefaultHandlerTimeout)
+	defer cancel()
 
-// ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
-// defer cancel()
+	jobID := r.PathValue("id")
+	if jobID == "" || uuid.Validate(jobID) != nil {
+		log.ErrorContext(ctx, consts.RespQueryParamMissing)
+		response.BadRequest(w, consts.RespQueryParamMissing, nil)
 
-// // err := ro.svc.Stop(ctx)
-// // if err != nil {
-// // 	ro.log.ErrorContext(ctx, "service stop failed", slog.Any("error", err))
-// // 	w.WriteHeader(http.StatusInternalServerError)
-// // 	w.Write([]byte("service stop failed"))
-// // 	return
-// // }
-// response.OK(w, "service stopped", nil, nil)
-// }
+		return
+	}
+
+	err := ro.storer.CancelJob(ctx, jobID)
+	if errors.Is(err, errs.ErrJobNotFound) {
+		log.ErrorContext(ctx, consts.RespJobNotFound, slog.Any("error", err))
+		response.NotFound(w, consts.RespJobNotFound, err)
+
+		return
+	}
+
+	if errors.Is(err, errs.ErrJobCancelled) {
+		log.DebugContext(ctx, consts.RespJobCancelFailed, slog.Any("error", err))
+		response.OK(w, consts.RespJobCancelled, nil, nil)
+
+		return
+	}
+
+	if err != nil {
+		log.ErrorContext(ctx, consts.RespJobCancelFailed, slog.Any("error", err))
+		response.InternalServerError(w, consts.RespJobCancelFailed, nil, err)
+
+		return
+	}
+
+	log.InfoContext(ctx, consts.RespJobCancelled, slog.String("job_id", jobID))
+
+	response.OK(w, consts.RespJobCancelled, nil, nil)
+}
 
 // DownloadPublication handles file downloads with resume support.
 func (ro *Router) DownloadPublication(w http.ResponseWriter, r *http.Request) {
