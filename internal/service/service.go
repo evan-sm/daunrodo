@@ -69,12 +69,12 @@ func (svc *Job) Enqueue(ctx context.Context, url, preset string) (*entity.Job, e
 
 	url = urls.Normalize(url)
 
-	job := svc.Storer.GetJobByURLAndPreset(ctx, url, preset)
-	if job != nil && job.Status != entity.JobStatusError {
-		return job, errs.ErrJobAlreadyExists
+	job, found := svc.Storer.GetJobByURLAndPreset(ctx, url, preset)
+	if found && (job.Status != entity.JobStatusError && job.Status != entity.JobStatusCancelled) {
+		return &job, errs.ErrJobAlreadyExists
 	}
 
-	job = &entity.Job{
+	job = entity.Job{
 		UUID:      gen.UUIDv5(url, preset),
 		URL:       url,
 		Preset:    preset,
@@ -87,12 +87,12 @@ func (svc *Job) Enqueue(ctx context.Context, url, preset string) (*entity.Job, e
 	svc.Storer.SetJob(ctx, job)
 
 	select {
-	case svc.JobQueue <- job:
-		return job, nil
+	case svc.JobQueue <- &job:
+		return &job, nil
 	case <-ctx.Done():
 		return nil, fmt.Errorf("enqueue job canceled: %w", ctx.Err())
 	default:
-		svc.Storer.UpdateJobStatus(ctx, job, entity.JobStatusError, 0, "job queue is full")
+		svc.Storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusError, 0, "job queue is full")
 
 		return nil, fmt.Errorf("%w: %d/%d", errs.ErrJobQueueFull, len(svc.JobQueue), cap(svc.JobQueue))
 	}
@@ -148,13 +148,13 @@ func (svc *Job) processJob(ctx context.Context, job *entity.Job) {
 		// Check if it was cancelled
 		if jobCtx.Err() == context.Canceled {
 			log.InfoContext(ctx, "job cancelled", slog.Any("job_id", job.UUID))
-			svc.Storer.UpdateJobStatus(ctx, job, entity.JobStatusCancelled, 0, "job cancelled by user")
+			svc.Storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusCancelled, 0, "job cancelled by user")
 
 			return
 		}
 
 		log.ErrorContext(ctx, "downloader process", slog.Any("error", err))
-		svc.Storer.UpdateJobStatus(ctx, job, entity.JobStatusError, 0, err.Error())
+		svc.Storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusError, 0, err.Error())
 
 		return
 	}

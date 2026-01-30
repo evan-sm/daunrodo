@@ -25,20 +25,20 @@ func TestGetJob(t *testing.T) {
 
 	uuid := gen.UUIDv5("a", "b")
 
-	storer.SetJob(ctx, &entity.Job{UUID: uuid})
+	storer.SetJob(ctx, entity.Job{UUID: uuid})
 
-	job := storer.GetJobByID(ctx, uuid)
-	if job == nil {
+	job, ok := storer.GetJobByID(ctx, uuid)
+	if !ok {
 		t.Errorf("failed to get job")
 	}
 
-	got := storer.GetJobByURLAndPreset(ctx, "a", "b")
-	if got == nil {
+	got, ok := storer.GetJobByURLAndPreset(ctx, "a", "b")
+	if !ok {
 		t.Errorf("expected job to be found")
 	}
 
-	if got != job {
-		t.Errorf("expected job pointer to be the same")
+	if got.UUID != job.UUID {
+		t.Errorf("expected job UUID to match")
 	}
 
 	// test GetJobs
@@ -59,14 +59,14 @@ func TestUpdateJobStatus(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		job      *entity.Job
+		job      entity.Job
 		status   entity.JobStatus
 		progress int
 		errorMsg string
 	}{
 		{
 			name:     "update job status",
-			job:      &entity.Job{UUID: gen.UUIDv5("a", "b"), Status: entity.JobStatusStarting},
+			job:      entity.Job{UUID: gen.UUIDv5("a", "b"), Status: entity.JobStatusStarting},
 			status:   entity.JobStatusFinished,
 			progress: 100,
 			errorMsg: "",
@@ -78,22 +78,22 @@ func TestUpdateJobStatus(t *testing.T) {
 
 			storer.SetJob(ctx, tt.job)
 
-			storer.UpdateJobStatus(ctx, tt.job, tt.status, tt.progress, tt.errorMsg)
+			storer.UpdateJobStatus(ctx, tt.job.UUID, tt.status, tt.progress, tt.errorMsg)
 
-			job := storer.GetJobByID(ctx, tt.job.UUID)
-			if job == nil {
+			job, ok := storer.GetJobByID(ctx, tt.job.UUID)
+			if !ok {
 				t.Errorf("expected job to be found")
 			}
 
-			if job != nil && job.Status != tt.status {
+			if job.Status != tt.status {
 				t.Errorf("expected job status to be %v, got %v", tt.status, job.Status)
 			}
 
-			if job != nil && job.Progress != tt.progress {
+			if job.Progress != tt.progress {
 				t.Errorf("expected job progress to be %d, got %d", tt.progress, job.Progress)
 			}
 
-			if job != nil && job.Error != tt.errorMsg {
+			if job.Error != tt.errorMsg {
 				t.Errorf("expected job error message to be %q, got %q", tt.errorMsg, job.Error)
 			}
 		})
@@ -108,19 +108,19 @@ func TestSetGetPublication(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		job         *entity.Job
+		job         entity.Job
 		publication *entity.Publication
 		wantErr     bool
 	}{
 		{
 			name:        "job does not exist",
-			job:         &entity.Job{UUID: ""},
+			job:         entity.Job{UUID: ""},
 			publication: &entity.Publication{UUID: gen.UUIDv5("c", "d")},
 			wantErr:     true,
 		},
 		{
 			name:        "job exists",
-			job:         &entity.Job{UUID: gen.UUIDv5("a", "b")},
+			job:         entity.Job{UUID: gen.UUIDv5("a", "b")},
 			publication: &entity.Publication{UUID: gen.UUIDv5("c", "d")},
 			wantErr:     false,
 		},

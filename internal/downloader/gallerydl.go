@@ -85,7 +85,7 @@ func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage
 
 	log := d.log.With(slog.Any("job", job))
 
-	storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, 0, "")
+	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, 0, "")
 
 	// Build command arguments
 	args := d.buildArgs(job)
@@ -142,23 +142,20 @@ func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage
 	}
 
 	// Parse results
-	job.Publications, err = d.composePublications(ctx, stdoutBuf.String())
+	publications, err := d.composePublications(ctx, stdoutBuf.String())
 	if err != nil {
 		return fmt.Errorf("compose publications: %w", err)
 	}
 
-	// Calculate total size
-	for _, pub := range job.Publications {
-		job.TotalSize += pub.FileSize
-	}
+	log.InfoContext(ctx, "publications composed", "publications", publications)
 
-	log.InfoContext(ctx, "publications composed", "publications", job.Publications)
-
-	if err := storePublications(ctx, job, storer); err != nil {
+	if err := storePublications(ctx, job.UUID, publications, storer); err != nil {
 		return fmt.Errorf("store publications: %w", err)
 	}
 
-	storer.UpdateJobStatus(ctx, job, entity.JobStatusFinished, fullProgress, "")
+	storer.UpdateJobPublications(ctx, job.UUID, publications)
+
+	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusFinished, fullProgress, "")
 
 	log.InfoContext(ctx, "done")
 
@@ -238,7 +235,7 @@ func (d *GalleryDL) handleProgress(
 			slog.Float64("progress", progress),
 			slog.Int("current", current),
 			slog.Int("total", total))
-		storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, int(progress), "")
+		storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, int(progress), "")
 	}
 }
 

@@ -70,7 +70,7 @@ func TestCleanupExpiredJobs(t *testing.T) {
 				ctx := t.Context()
 				now := time.Now()
 
-				expiredJob := &entity.Job{
+				expiredJob := entity.Job{
 					UUID:      uuid(),
 					CreatedAt: now,
 					UpdatedAt: now,
@@ -87,7 +87,7 @@ func TestCleanupExpiredJobs(t *testing.T) {
 					},
 				}
 
-				newJob := &entity.Job{
+				newJob := entity.Job{
 					UUID:      uuid(),
 					CreatedAt: now,
 					UpdatedAt: now,
@@ -100,7 +100,7 @@ func TestCleanupExpiredJobs(t *testing.T) {
 					},
 				}
 
-				newJob2Files := &entity.Job{
+				newJob2Files := entity.Job{
 					UUID:      uuid(),
 					CreatedAt: now,
 					UpdatedAt: now,
@@ -117,7 +117,7 @@ func TestCleanupExpiredJobs(t *testing.T) {
 					},
 				}
 
-				jobs := []*entity.Job{expiredJob, newJob, newJob2Files}
+				jobs := []entity.Job{expiredJob, newJob, newJob2Files}
 
 				storer := storage.New(ctx, log, tt.cfg)
 
@@ -134,18 +134,18 @@ func TestCleanupExpiredJobs(t *testing.T) {
 
 				time.Sleep(cleanupInterval + time.Minute)
 
-				expired := storer.GetJobByID(ctx, expiredJob.UUID)
-				if expired != nil {
+				_, ok := storer.GetJobByID(ctx, expiredJob.UUID)
+				if ok {
 					t.Fatal("expected job to be cleaned up, but found")
 				}
 
-				foundNew := storer.GetJobByID(ctx, newJob.UUID)
-				if foundNew == nil {
+				_, ok = storer.GetJobByID(ctx, newJob.UUID)
+				if !ok {
 					t.Fatal("expected new job to be present, but found none")
 				}
 
-				job2files := storer.GetJobByID(ctx, newJob2Files.UUID)
-				if job2files == nil {
+				_, ok = storer.GetJobByID(ctx, newJob2Files.UUID)
+				if !ok {
 					t.Fatal("expected job to be present, but found none")
 				}
 			})

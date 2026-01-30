@@ -23,6 +23,7 @@ import (
 	"daunrodo/internal/proxymgr"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/gen"
+	"daunrodo/pkg/shellquote"
 )
 
 const fullProgress = 100
@@ -80,14 +81,16 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 
 	log := d.log.With(slog.Any("job", job))
 
-	storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, 0, "")
+	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, 0, "")
 
 	// Get estimated file size before downloading
 	estimatedSize, err := d.getEstimatedSize(ctx, job.URL, job.Preset)
 	if err != nil {
 		log.WarnContext(ctx, "failed to get estimated size", slog.Any("error", err))
-	} else {
-		job.EstimatedSize = estimatedSize
+	}
+
+	if estimatedSize > 0 {
+		storer.UpdateJobEstimatedSize(ctx, job.UUID, estimatedSize)
 	}
 
 	// Build command arguments
@@ -99,7 +102,7 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 		binPath = d.depMgr.GetBinaryPath(depmanager.BinaryYTdlp)
 	}
 
-	log.DebugContext(ctx, "executing yt-dlp", slog.String("binary", binPath), slog.Any("args", args))
+	log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", shellquote.Join(binPath, args)))
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
 
@@ -124,14 +127,14 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 		waitGrp   sync.WaitGroup
 	)
 
-	// Read stdout (JSON output)
+	// Read stdout (JSON output + progress updates)
 	waitGrp.Go(func() {
-		io.Copy(&stdoutBuf, stdout)
+		d.handleProgress(ctx, stdout, &stdoutBuf, job, storer)
 	})
 
-	// Read stderr (progress updates)
+	// Read stderr (error output)
 	waitGrp.Go(func() {
-		d.handleProgress(ctx, stderr, &stderrBuf, job, storer)
+		io.Copy(&stderrBuf, stderr)
 	})
 
 	waitGrp.Wait()
@@ -145,23 +148,20 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 	}
 
 	// Parse results
-	job.Publications, err = d.composePublications(stdoutBuf.String())
+	publications, err := d.composePublications(stdoutBuf.String())
 	if err != nil {
 		return fmt.Errorf("compose publications: %w", err)
 	}
 
-	// Calculate total size
-	for _, pub := range job.Publications {
-		job.TotalSize += pub.FileSize
-	}
+	log.InfoContext(ctx, "publications composed", "publications", publications)
 
-	log.InfoContext(ctx, "publications composed", "publications", job.Publications)
-
-	if err := storePublications(ctx, job, storer); err != nil {
+	if err := storePublications(ctx, job.UUID, publications, storer); err != nil {
 		return fmt.Errorf("store publications: %w", err)
 	}
 
-	storer.UpdateJobStatus(ctx, job, entity.JobStatusFinished, fullProgress, "")
+	storer.UpdateJobPublications(ctx, job.UUID, publications)
+
+	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusFinished, fullProgress, "")
 
 	log.InfoContext(ctx, "done")
 
@@ -279,20 +279,44 @@ func ParseProgress(line string) (float64, bool) {
 	return progress, true
 }
 
+func splitLinesAny(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case '\n':
+			return i + 1, data[:i], nil
+		case '\r':
+			if i+1 < len(data) && data[i+1] == '\n' {
+				return i + 2, data[:i], nil
+			}
+
+			return i + 1, data[:i], nil
+		}
+	}
+
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+
+	return 0, nil, nil
+}
+
 func (d *YTdlp) handleProgress(
 	ctx context.Context,
 	reader io.Reader,
-	stderrBuf *strings.Builder,
+	stdoutBuf *strings.Builder,
 	job *entity.Job,
 	storer storage.Storer,
 ) {
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, bufSize), maxJSONSize)
+	scanner.Split(splitLinesAny)
+
 	lastUpdate := time.Now()
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		stderrBuf.WriteString(line)
-		stderrBuf.WriteString("\n")
+		stdoutBuf.WriteString(line)
+		stdoutBuf.WriteString("\n")
 
 		// Parse progress
 		progress, ok := ParseProgress(line)
@@ -308,7 +332,7 @@ func (d *YTdlp) handleProgress(
 		lastUpdate = time.Now()
 
 		d.log.DebugContext(ctx, "download progress", slog.Float64("progress", progress))
-		storer.UpdateJobStatus(ctx, job, entity.JobStatusDownloading, int(progress), "")
+		storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, int(progress), "")
 	}
 }
 
@@ -397,13 +421,14 @@ func ParseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 	return res, nil
 }
 
-func storePublications(ctx context.Context, job *entity.Job, storer storage.Storer) error {
-	if job == nil {
-		return errs.ErrJobNil
+func storePublications(ctx context.Context, jobID string, publications []entity.Publication, storer storage.Storer) error {
+	if jobID == "" {
+		return errs.ErrJobIDEmpty
 	}
 
-	for _, pub := range job.Publications {
-		if err := storer.SetPublication(ctx, job.UUID, &pub); err != nil {
+	for i := range publications {
+		pub := publications[i]
+		if err := storer.SetPublication(ctx, jobID, &pub); err != nil {
 			return fmt.Errorf("store publication: %w", err)
 		}
 	}
@@ -429,6 +454,10 @@ func parseViewCount(v any) int {
 func getThumbnail(res ResultJSON) string {
 	if len(res.Entries) > 0 {
 		return res.Entries[0].Thumbnail
+	}
+
+	if res.Thumbnail != "" {
+		return res.Thumbnail
 	}
 
 	return ""

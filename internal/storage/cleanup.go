@@ -49,8 +49,8 @@ func (stg *storage) performCleanup(ctx context.Context) {
 	}
 }
 
-func (stg *storage) getExpiredJobs(now time.Time) []*entity.Job {
-	var expiredJobs []*entity.Job
+func (stg *storage) getExpiredJobs(now time.Time) []entity.Job {
+	var expiredJobs []entity.Job
 
 	for _, job := range stg.jobs {
 		if job.ExpiresAt.Before(now) {
@@ -61,11 +61,7 @@ func (stg *storage) getExpiredJobs(now time.Time) []*entity.Job {
 	return expiredJobs
 }
 
-func (stg *storage) cleanupJob(ctx context.Context, job *entity.Job) {
-	if job == nil {
-		return
-	}
-
+func (stg *storage) cleanupJob(ctx context.Context, job entity.Job) {
 	log := stg.log
 	deletedFiles := 0
 

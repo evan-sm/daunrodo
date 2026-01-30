@@ -74,8 +74,8 @@ func New(log *slog.Logger, cfg *config.Config) *Manager {
 // GetRandomProxy returns a random available proxy URL.
 // Returns empty string if no proxies are available.
 func (m *Manager) GetRandomProxy() string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	available := m.getAvailableProxies()
 	if len(available) == 0 {
@@ -87,8 +87,8 @@ func (m *Manager) GetRandomProxy() string {
 
 // GetProxy returns a specific proxy if available.
 func (m *Manager) GetProxy(proxyURL string) (string, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	info, exists := m.proxies[proxyURL]
 	if !exists {
@@ -226,8 +226,8 @@ func (m *Manager) StartHealthChecker(ctx context.Context) {
 
 // GetStats returns current proxy statistics.
 func (m *Manager) GetStats() map[string]ProxyStats {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	stats := make(map[string]ProxyStats, len(m.proxies))
 	for proxyURL, info := range m.proxies {
@@ -264,8 +264,8 @@ func (m *Manager) ProxyCount() int {
 
 // AvailableCount returns the number of currently available proxies.
 func (m *Manager) AvailableCount() int {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	return len(m.getAvailableProxies())
 }
@@ -288,10 +288,10 @@ func (m *Manager) getAvailableProxies() []string {
 }
 
 func (m *Manager) checkAllProxies(ctx context.Context) {
-	m.mu.RLock()
+	m.mu.Lock()
 	proxies := make([]string, len(m.order))
 	copy(proxies, m.order)
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	for _, proxy := range proxies {
 		select {

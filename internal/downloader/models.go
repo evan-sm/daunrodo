@@ -15,6 +15,7 @@ type ResultJSON struct {
 	CommentCount       int       `json:"comment_count"`
 	PostExtractor      any       `json:"__post_extractor"`
 	Entries            []Entries `json:"entries"`
+	Thumbnail          string    `json:"thumbnail"`
 	WebpageURL         string    `json:"webpage_url"`
 	OriginalURL        string    `json:"original_url"`
 	WebpageURLBasename string    `json:"webpage_url_basename"`

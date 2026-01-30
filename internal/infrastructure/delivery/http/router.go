@@ -219,8 +219,8 @@ func (ro *Router) GetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job := ro.storer.GetJobByID(ctx, jobID)
-	if job == nil {
+	job, ok := ro.storer.GetJobByID(ctx, jobID)
+	if !ok {
 		log.ErrorContext(ctx, consts.RespJobNotFound)
 		response.NoContent(w)
 
@@ -280,7 +280,7 @@ func (ro *Router) CancelJob(w http.ResponseWriter, r *http.Request) {
 
 	if errors.Is(err, errs.ErrJobCancelled) {
 		log.DebugContext(ctx, consts.RespJobCancelFailed, slog.Any("error", err))
-		response.Conflict(w, consts.RespJobCancelFailed, err)
+		response.OK(w, consts.RespJobCancelled, nil, nil)
 
 		return
 	}

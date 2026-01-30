@@ -82,7 +82,7 @@ type Manager struct {
 	platform Platform
 	client   *http.Client
 
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	shaSums   map[string]string     // filename -> sha256 hash (fetched from remote)
 	savedSums map[string]string     // filename -> sha256 hash (saved from previous run)
 	binPaths  map[BinaryName]string // binary name -> installed path
@@ -224,8 +224,8 @@ func (m *Manager) GetBinaryPath(name BinaryName) string {
 
 // GetInstalledPath returns the installed path for a binary, or empty if not installed.
 func (m *Manager) GetInstalledPath(name BinaryName) string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	return m.binPaths[name]
 }
@@ -408,8 +408,8 @@ func (m *Manager) checkAndUpdate(ctx context.Context) {
 
 // findUpdates compares fetched checksums with saved checksums and returns binaries that need updating.
 func (m *Manager) findUpdates() []BinaryName {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	var updates []BinaryName
 
@@ -518,9 +518,9 @@ func (m *Manager) loadSavedSums() error {
 
 // saveSums saves current checksums to file for future comparison.
 func (m *Manager) saveSums() error {
-	m.mu.RLock()
+	m.mu.Lock()
 	data, err := json.MarshalIndent(m.shaSums, "", "  ")
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	if err != nil {
 		return fmt.Errorf("marshal checksums: %w", err)
