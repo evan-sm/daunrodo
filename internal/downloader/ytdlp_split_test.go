@@ -1,7 +1,8 @@
-package downloader
+package downloader_test
 
 import (
 	"bufio"
+	"daunrodo/internal/downloader"
 	"reflect"
 	"strings"
 	"testing"
@@ -38,7 +39,7 @@ func TestSplitLinesAny(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			scanner := bufio.NewScanner(strings.NewReader(tc.input))
-			scanner.Split(splitLinesAny)
+			scanner.Split(downloader.SplitLinesAny)
 
 			var got []string
 			for scanner.Scan() {

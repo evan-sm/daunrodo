@@ -279,14 +279,15 @@ func ParseProgress(line string) (float64, bool) {
 	return progress, true
 }
 
-func splitLinesAny(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	for i := 0; i < len(data); i++ {
+// SplitLinesAny is a bufio.SplitFunc that splits on both \n and \r\n line endings.
+func SplitLinesAny(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	for i := 0; i < len(data); i++ { //nolint:intrange,modernize
 		switch data[i] {
 		case '\n':
 			return i + 1, data[:i], nil
 		case '\r':
 			if i+1 < len(data) && data[i+1] == '\n' {
-				return i + 2, data[:i], nil
+				return i + 2, data[:i], nil //nolint:mnd
 			}
 
 			return i + 1, data[:i], nil
@@ -309,7 +310,7 @@ func (d *YTdlp) handleProgress(
 ) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, bufSize), maxJSONSize)
-	scanner.Split(splitLinesAny)
+	scanner.Split(SplitLinesAny)
 
 	lastUpdate := time.Now()
 
@@ -421,7 +422,7 @@ func ParseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 	return res, nil
 }
 
-func storePublications(ctx context.Context, jobID string, publications []entity.Publication, storer storage.Storer) error {
+func storePublications(ctx context.Context, jobID string, publications []entity.Publication, storer storage.Storer) error { //nolint:lll
 	if jobID == "" {
 		return errs.ErrJobIDEmpty
 	}

@@ -1,4 +1,4 @@
-package proxymgr
+package proxymgr_test
 
 import (
 	"log/slog"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"daunrodo/internal/config"
+	"daunrodo/internal/proxymgr"
 )
 
 // testProxyURL is the proxy URL used in tests.
@@ -51,7 +52,7 @@ func TestNew(t *testing.T) {
 				},
 			}
 
-			mgr := New(log, cfg)
+			mgr := proxymgr.New(log, cfg)
 
 			if got := mgr.ProxyCount(); got != tc.wantCount {
 				t.Errorf("ProxyCount() = %d, want %d", got, tc.wantCount)
@@ -100,7 +101,7 @@ func TestGetRandomProxy(t *testing.T) {
 				},
 			}
 
-			mgr := New(log, cfg)
+			mgr := proxymgr.New(log, cfg)
 			got := mgr.GetRandomProxy()
 
 			if tc.wantEmpty && got != "" {
@@ -124,7 +125,7 @@ func TestGetProxy(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 
 	proxy, exists := mgr.GetProxy(testProxyURL)
 	if !exists {
@@ -157,7 +158,7 @@ func TestMarkFailed(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 	proxy := testProxyURL
 
 	for range 3 {
@@ -165,7 +166,7 @@ func TestMarkFailed(t *testing.T) {
 	}
 
 	stats := mgr.GetStats()
-	if stats[proxy].State != ProxyStateFailed {
+	if stats[proxy].State != proxymgr.ProxyStateFailed {
 		t.Errorf("State = %v, want ProxyStateFailed", stats[proxy].State)
 	}
 
@@ -190,7 +191,7 @@ func TestMarkSuccess(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 	proxy := testProxyURL
 
 	for range 3 {
@@ -200,7 +201,7 @@ func TestMarkSuccess(t *testing.T) {
 	mgr.MarkSuccess(proxy)
 
 	stats := mgr.GetStats()
-	if stats[proxy].State != ProxyStateAvailable {
+	if stats[proxy].State != proxymgr.ProxyStateAvailable {
 		t.Errorf("State = %v, want ProxyStateAvailable", stats[proxy].State)
 	}
 
@@ -221,7 +222,7 @@ func TestRestoreProxy(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 	proxy := testProxyURL
 
 	for range 5 {
@@ -231,7 +232,7 @@ func TestRestoreProxy(t *testing.T) {
 	mgr.RestoreProxy(proxy)
 
 	stats := mgr.GetStats()
-	if stats[proxy].State != ProxyStateAvailable {
+	if stats[proxy].State != proxymgr.ProxyStateAvailable {
 		t.Errorf("State = %v, want ProxyStateAvailable", stats[proxy].State)
 	}
 
@@ -252,7 +253,7 @@ func TestBackoffExpiry(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 	proxy := testProxyURL
 
 	mgr.MarkFailed(proxy)
@@ -280,7 +281,7 @@ func TestMarkFailedNonExistent(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 	mgr.MarkFailed("socks5h://nonexistent:1080")
 }
 
@@ -296,7 +297,7 @@ func TestGetStats(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 
 	stats := mgr.GetStats()
 
@@ -305,7 +306,7 @@ func TestGetStats(t *testing.T) {
 	}
 
 	for proxy, stat := range stats {
-		if stat.State != ProxyStateAvailable {
+		if stat.State != proxymgr.ProxyStateAvailable {
 			t.Errorf("proxy %s: State = %v, want ProxyStateAvailable", proxy, stat.State)
 		}
 
@@ -326,7 +327,7 @@ func TestStartHealthChecker_NoProxies(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 
 	mgr.StartHealthChecker(t.Context())
 }
@@ -342,7 +343,7 @@ func TestStartHealthChecker_ZeroInterval(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := proxymgr.New(log, cfg)
 
 	mgr.StartHealthChecker(t.Context())
 }

@@ -671,11 +671,12 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 				switch r.URL.Path {
 				case "/sha":
 					body := fmt.Sprintf("%s  %s\n", newHash, filename)
-					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil //nolint:lll
 				case "/bin":
-					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(binaryContent)), Header: make(http.Header), Request: r}, nil
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(binaryContent)), Header: make(http.Header), Request: r}, nil //nolint:lll
 				default:
-					return &http.Response{StatusCode: 404, Body: io.NopCloser(strings.NewReader("nf")), Header: make(http.Header), Request: r}, nil
+					return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("nf")), Header: make(http.Header), Request: r}, nil //nolint:lll
 				}
 			}),
 		}

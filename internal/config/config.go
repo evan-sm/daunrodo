@@ -118,24 +118,24 @@ type DepManager struct {
 	UpdateInterval time.Duration `env:"DAUNRODO_DEPMANAGER_UPDATE_INTERVAL" envDefault:"24h"`
 
 	// ffmpeg binary URLs per platform.
-	FFmpegSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_FFMPEG_SHA256SUMS_URL" envDefault:"https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/checksums.sha256"`
-	FFmpegLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_FFMPEG_LINUX_ARM64" envDefault:"https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"`
-	FFmpegLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_FFMPEG_LINUX_AMD64" envDefault:"https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz"`
+	FFmpegSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_FFMPEG_SHA256SUMS_URL" envDefault:"https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/checksums.sha256"`                        //nolint:lll
+	FFmpegLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_FFMPEG_LINUX_ARM64" envDefault:"https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"` //nolint:lll
+	FFmpegLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_FFMPEG_LINUX_AMD64" envDefault:"https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz"`    //nolint:lll
 
 	// yt-dlp binary URLs per platform.
-	YTdlpSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_YTDLP_SHA256SUMS_URL" envDefault:"https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"`
-	YTdlpLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_YTDLP_LINUX_ARM64" envDefault:"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64"` // zip: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64.zip
-	YTdlpLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_YTDLP_LINUX_AMD64" envDefault:"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"`         // zip: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux.zip
+	YTdlpSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_YTDLP_SHA256SUMS_URL" envDefault:"https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"`      //nolint:lll
+	YTdlpLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_YTDLP_LINUX_ARM64" envDefault:"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64"` //nolint:lll // zip: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64.zip
+	YTdlpLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_YTDLP_LINUX_AMD64" envDefault:"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"`         //nolint:lll        // zip: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux.zip
 
 	// gallery-dl binary URLs per platform.
-	GalleryDLSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_GALLERYDL_SHA256SUMS_URL" envDefault:"https://github.com/gallery-dl-builds/gallery-dl-builds/releases/latest/download/SHA256SUMS.txt"`
-	GalleryDLLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_GALLERYDL_LINUX_ARM64" envDefault:"https://github.com/gallery-dl-builds/gallery-dl-builds/releases/latest/download/gallery-dl_linux_arm64"`
-	GalleryDLLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_GALLERYDL_LINUX_AMD64" envDefault:"https://github.com/gallery-dl-builds/gallery-dl-builds/releases/latest/download/gallery-dl_linux_amd64"`
+	GalleryDLSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_GALLERYDL_SHA256SUMS_URL" envDefault:"https://github.com/gallery-dl-builds/gallery-dl-builds/releases/latest/download/SHA256SUMS.txt"`      //nolint:lll
+	GalleryDLLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_GALLERYDL_LINUX_ARM64" envDefault:"https://github.com/gallery-dl-builds/gallery-dl-builds/releases/latest/download/gallery-dl_linux_arm64"` //nolint:lll
+	GalleryDLLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_GALLERYDL_LINUX_AMD64" envDefault:"https://github.com/gallery-dl-builds/gallery-dl-builds/releases/latest/download/gallery-dl_linux_amd64"` //nolint:lll
 
 	// deno binary URLs per platform.
-	DenoSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_DENO_SHA256SUMS_URL" envDefault:"https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip.sha256sum,https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip.sha256sum"`
-	DenoLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_DENO_LINUX_ARM64" envDefault:"https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip"`
-	DenoLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_DENO_LINUX_AMD64" envDefault:"https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"`
+	DenoSHA256SumsURL string `env:"DAUNRODO_DEPMANAGER_DENO_SHA256SUMS_URL" envDefault:"https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip.sha256sum,https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip.sha256sum"` //nolint:lll
+	DenoLinuxARM64    string `env:"DAUNRODO_DEPMANAGER_DENO_LINUX_ARM64" envDefault:"https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip"`                                                                                                                    //nolint:lll
+	DenoLinuxAMD64    string `env:"DAUNRODO_DEPMANAGER_DENO_LINUX_AMD64" envDefault:"https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"`                                                                                                                     //nolint:lll
 }
 
 // SetAbsPaths converts the BinsDir path to an absolute path.

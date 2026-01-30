@@ -27,13 +27,13 @@ func TestGetJob(t *testing.T) {
 
 	storer.SetJob(ctx, entity.Job{UUID: uuid})
 
-	job, ok := storer.GetJobByID(ctx, uuid)
-	if !ok {
+	job, exists := storer.GetJobByID(ctx, uuid)
+	if !exists {
 		t.Errorf("failed to get job")
 	}
 
-	got, ok := storer.GetJobByURLAndPreset(ctx, "a", "b")
-	if !ok {
+	got, exists := storer.GetJobByURLAndPreset(ctx, "a", "b")
+	if !exists {
 		t.Errorf("expected job to be found")
 	}
 
@@ -80,8 +80,8 @@ func TestUpdateJobStatus(t *testing.T) {
 
 			storer.UpdateJobStatus(ctx, tt.job.UUID, tt.status, tt.progress, tt.errorMsg)
 
-			job, ok := storer.GetJobByID(ctx, tt.job.UUID)
-			if !ok {
+			job, exists := storer.GetJobByID(ctx, tt.job.UUID)
+			if !exists {
 				t.Errorf("expected job to be found")
 			}
 

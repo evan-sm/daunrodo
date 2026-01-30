@@ -4,6 +4,7 @@ linters:
   default: all
   disable:
     - tagliatelle
+    - nonamedreturns
     - paralleltest
     - tparallel
     - noinlineerr

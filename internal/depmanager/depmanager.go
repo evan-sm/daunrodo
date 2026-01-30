@@ -365,6 +365,7 @@ func (m *Manager) checkAndUpdate(ctx context.Context) {
 	}
 
 	m.isUpdating = true
+
 	defer func() { m.isUpdating = false }()
 
 	log := m.log

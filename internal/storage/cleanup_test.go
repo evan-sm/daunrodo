@@ -134,18 +134,18 @@ func TestCleanupExpiredJobs(t *testing.T) {
 
 				time.Sleep(cleanupInterval + time.Minute)
 
-				_, ok := storer.GetJobByID(ctx, expiredJob.UUID)
-				if ok {
+				_, exists := storer.GetJobByID(ctx, expiredJob.UUID)
+				if exists {
 					t.Fatal("expected job to be cleaned up, but found")
 				}
 
-				_, ok = storer.GetJobByID(ctx, newJob.UUID)
-				if !ok {
+				_, exists = storer.GetJobByID(ctx, newJob.UUID)
+				if !exists {
 					t.Fatal("expected new job to be present, but found none")
 				}
 
-				_, ok = storer.GetJobByID(ctx, newJob2Files.UUID)
-				if !ok {
+				_, exists = storer.GetJobByID(ctx, newJob2Files.UUID)
+				if !exists {
 					t.Fatal("expected job to be present, but found none")
 				}
 			})

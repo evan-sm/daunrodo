@@ -151,8 +151,8 @@ func TestStartAndEnqueue(t *testing.T) {
 					}
 				}
 
-				job, ok := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
-				if ok && job.Status != entity.JobStatusStarting {
+				job, exists := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+				if exists && job.Status != entity.JobStatusStarting {
 					t.Errorf("expected job to be started")
 				}
 
@@ -212,8 +212,8 @@ func TestWorker(t *testing.T) {
 				<-ctx.Done()
 				synctest.Wait()
 
-				storedJob, ok := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
-				if !ok {
+				storedJob, exists := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+				if !exists {
 					t.Fatalf("failed to get job")
 				}
 
@@ -367,26 +367,26 @@ func TestEnqueue(t *testing.T) {
 		t.Errorf("failed to enqueue job: %v", err)
 	}
 
-	_, ok := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
-	if !ok {
+	_, exists := svc.Storer.GetJobByURLAndPreset(ctx, testURL, testPresetMP4)
+	if !exists {
 		t.Errorf("expected job to be found")
 	}
 
-	if ok && job.Status != entity.JobStatusStarting {
+	if exists && job.Status != entity.JobStatusStarting {
 		t.Errorf("expected job to be started")
 	}
 
-	_, ok = svc.Storer.GetJobByID(ctx, job.UUID)
-	if !ok {
+	_, exists = svc.Storer.GetJobByID(ctx, job.UUID)
+	if !exists {
 		t.Errorf("expected job to be found")
 	}
 
-	if ok && job.Status != entity.JobStatusStarting {
+	if exists && job.Status != entity.JobStatusStarting {
 		t.Errorf("expected job to be started")
 	}
 
-	_, ok = svc.Storer.GetJobByURLAndPreset(ctx, testURL2, testPresetMP4)
-	if ok {
+	_, exists = svc.Storer.GetJobByURLAndPreset(ctx, testURL2, testPresetMP4)
+	if exists {
 		t.Errorf("expected error for non-existent job, got: %v", err)
 	}
 }

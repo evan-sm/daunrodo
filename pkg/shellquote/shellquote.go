@@ -19,28 +19,33 @@ import (
 // }
 
 // shellEscapeDQ returns a bash/zsh-safe argument using double quotes when needed.
-// In double quotes, these must be escaped: \ " $ `
-func shellEscapeDQ(s string) string {
+// In double quotes, these must be escaped: \ " $ `.
+func shellEscapeDQ(s string) string { //nolint:varnamelen
 	if s == "" {
 		return `""`
 	}
 
 	// "Simple" chars safe to keep unquoted.
 	const safe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-"
+
 	needsQuotes := false
+
 	for _, r := range s {
 		if !strings.ContainsRune(safe, r) {
 			needsQuotes = true
+
 			break
 		}
 	}
+
 	if !needsQuotes {
 		return s
 	}
 
-	var b strings.Builder
+	var b strings.Builder //nolint:varnamelen
 	b.WriteByte('"')
-	for _, r := range s {
+
+	for _, r := range s { //nolint:varnamelen
 		switch r {
 		case '\\', '"', '$', '`':
 			b.WriteByte('\\')
@@ -56,17 +61,22 @@ func shellEscapeDQ(s string) string {
 			b.WriteRune(r)
 		}
 	}
+
 	b.WriteByte('"')
+
 	return b.String()
 }
 
 // Join constructs a shell-pasteable command line from bin and args.
 func Join(bin string, args []string) string {
-	var b strings.Builder
-	b.WriteString(shellEscapeDQ(bin))
-	for _, a := range args {
-		b.WriteByte(' ')
-		b.WriteString(shellEscapeDQ(a))
+	var cmdLine strings.Builder
+
+	cmdLine.WriteString(shellEscapeDQ(bin))
+
+	for _, arg := range args {
+		cmdLine.WriteByte(' ')
+		cmdLine.WriteString(shellEscapeDQ(arg))
 	}
-	return b.String()
+
+	return cmdLine.String()
 }

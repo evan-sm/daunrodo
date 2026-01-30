@@ -14,7 +14,7 @@ import (
 )
 
 // Storer defines the interface for storage operations.
-type Storer interface {
+type Storer interface { //nolint:interfacebloat
 	SetJob(ctx context.Context, job entity.Job)
 	GetJobByURLAndPreset(ctx context.Context, url, preset string) (entity.Job, bool)
 	GetJobByID(ctx context.Context, id string) (entity.Job, bool)
