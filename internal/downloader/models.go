@@ -1,5 +1,7 @@
 package downloader
 
+import "strconv"
+
 // ResultJSON represents the JSON output from yt-dlp.
 type ResultJSON struct {
 	Type               string    `json:"_type"`
@@ -28,6 +30,35 @@ type ResultJSON struct {
 	Epoch              int       `json:"epoch"`
 	Version            Version   `json:"_version"`
 	Filename           string    `json:"filename"`
+}
+
+// GetThumbnail returns the thumbnail URL from the result.
+func (res *ResultJSON) GetThumbnail() string {
+	if len(res.Entries) > 0 {
+		return res.Entries[0].Thumbnail
+	}
+
+	if res.Thumbnail != "" {
+		return res.Thumbnail
+	}
+
+	return ""
+}
+
+// GetViewCount returns the view count as an integer.
+func (res *ResultJSON) GetViewCount() int {
+	switch val := res.ViewCount.(type) {
+	case int:
+		return val
+	case float64:
+		return int(val)
+	case string:
+		i, _ := strconv.Atoi(val)
+
+		return i
+	default:
+		return 0
+	}
 }
 
 // Entries represents an entry in a playlist or multiple entries result.

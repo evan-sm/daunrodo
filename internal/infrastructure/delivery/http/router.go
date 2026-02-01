@@ -3,14 +3,6 @@ package httprouter
 
 import (
 	"context"
-	"daunrodo/internal/config"
-	"daunrodo/internal/consts"
-	"daunrodo/internal/errs"
-	"daunrodo/internal/infrastructure/delivery/http/middleware"
-	"daunrodo/internal/infrastructure/delivery/http/request"
-	"daunrodo/internal/infrastructure/delivery/http/response"
-	"daunrodo/internal/service"
-	"daunrodo/internal/storage"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"daunrodo/internal/config"
+	"daunrodo/internal/consts"
+	"daunrodo/internal/errs"
+	"daunrodo/internal/infrastructure/delivery/http/middleware"
+	"daunrodo/internal/infrastructure/delivery/http/request"
+	"daunrodo/internal/infrastructure/delivery/http/response"
+	"daunrodo/internal/service"
+	"daunrodo/internal/storage"
 
 	"github.com/google/uuid"
 )
