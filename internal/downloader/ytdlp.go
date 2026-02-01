@@ -230,6 +230,9 @@ func (d *YTdlp) getEstimatedSize(ctx context.Context, url, preset string) (int64
 
 func (d *YTdlp) buildArgs(job *entity.Job) []string {
 	args := []string{
+		"--ffmpeg-location", d.depMgr.GetInstalledPath(depmanager.BinaryFFmpeg),
+		"--remote-components", "ejs:github",
+		"--js-runtimes", fmt.Sprintf("deno:%s", d.depMgr.GetInstalledPath(depmanager.BinaryDeno)),
 		"--cache-dir", d.cfg.Dir.Cache,
 		"--no-playlist",
 		"--print-json",
@@ -281,7 +284,7 @@ func ParseProgress(line string) (float64, bool) {
 
 // SplitLinesAny is a bufio.SplitFunc that splits on both \n and \r\n line endings.
 func SplitLinesAny(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	for i := 0; i < len(data); i++ { //nolint:intrange,modernize
+	for i := range data {
 		switch data[i] {
 		case '\n':
 			return i + 1, data[:i], nil
@@ -369,9 +372,9 @@ func (d *YTdlp) composePublications(stdout string) ([]entity.Publication, error)
 			Description:  res.Description,
 			WebpageURL:   res.WebpageURL,
 			Title:        res.Title,
-			ViewCount:    parseViewCount(res.ViewCount),
+			ViewCount:    res.GetViewCount(),
 			LikeCount:    res.LikeCount,
-			ThumbnailURL: getThumbnail(res),
+			ThumbnailURL: res.GetThumbnail(),
 			FileSize:     fileSize,
 			Duration:     res.Timestamp,
 			Filename:     res.Filename,
@@ -435,31 +438,4 @@ func storePublications(ctx context.Context, jobID string, publications []entity.
 	}
 
 	return nil
-}
-
-func parseViewCount(v any) int {
-	switch val := v.(type) {
-	case int:
-		return val
-	case float64:
-		return int(val)
-	case string:
-		i, _ := strconv.Atoi(val)
-
-		return i
-	default:
-		return 0
-	}
-}
-
-func getThumbnail(res ResultJSON) string {
-	if len(res.Entries) > 0 {
-		return res.Entries[0].Thumbnail
-	}
-
-	if res.Thumbnail != "" {
-		return res.Thumbnail
-	}
-
-	return ""
 }

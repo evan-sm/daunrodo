@@ -29,10 +29,8 @@ type Storer interface { //nolint:interfacebloat
 	// CancelJob cancels a job by its ID.
 	CancelJob(ctx context.Context, jobID string) error
 
-	// RegisterCancelFunc stores a cancel function for a job.
+	// Used to manage job cancellation functions.
 	RegisterCancelFunc(jobID string, cancelFunc context.CancelFunc)
-
-	// UnregisterCancelFunc removes the cancel function for a job.
 	UnregisterCancelFunc(jobID string)
 
 	CleanupExpiredJobs(ctx context.Context, interval time.Duration)
