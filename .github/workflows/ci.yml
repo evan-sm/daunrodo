@@ -37,7 +37,7 @@ jobs:
         with:
           go-version-file: "go.mod"
       - name: Test
-        run: go test -v -race -cover ./...
+        run: go test -tags=integration -v -race -cover ./...
 
   build:
     name: Build
