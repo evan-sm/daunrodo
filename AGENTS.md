@@ -41,4 +41,4 @@ More details live in `BUILD.md`.
 - `downloader.GalleryDL`: gallery-dl downloader for TikTok image slideshows.
 
 ## When Changing Behavior
-- Update `README.md` and/or `BUILD.md` if you add new flags, env vars, or workflow steps.
+- Update `README.md` if you add new flags, env vars, or workflow steps.

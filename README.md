@@ -54,6 +54,17 @@ Metrics (Prometheus):
 curl localhost:8080/metrics
 ```
 
+# 🧪 Testing
+Unit tests:
+```shell
+go test -v -race -cover ./...
+```
+
+Integration tests:
+```shell
+go test -tags=integration -race -cover -v ./...
+```
+
 
 # 💪🏻 Motivation?
 `yt-dlp` uses terminal UI so using on phones is hard. But iOS Shortcuts can invoke custom user scripts that supports HTTP requests. Just share social media post from your phone, tap daunrodo shortcut and you get back original `.mp4` video file that can be saved into gallery. No more screen recordings 🖤
@@ -71,4 +82,4 @@ I also use it as an internal microservice for my other projects to make API call
 
 
 # 📑 License 
-(c) 2025 Ivan Smyshlyaev. [MIT License](https://tldrlegal.com/license/mit-license)
+(c) 2026 Ivan Smyshlyaev. [MIT License](https://tldrlegal.com/license/mit-license)
