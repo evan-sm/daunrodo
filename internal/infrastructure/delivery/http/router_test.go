@@ -4,12 +4,15 @@ import (
 	"daunrodo/internal/config"
 	"daunrodo/internal/downloader"
 	httprouter "daunrodo/internal/infrastructure/delivery/http"
+	"daunrodo/internal/observability"
 	"daunrodo/internal/service"
 	"daunrodo/internal/storage"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,10 +74,10 @@ func TestRouter(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	downloader := downloader.NewMock(log)
 	cfg := &config.Config{Storage: config.Storage{CleanupInterval: time.Minute}}
-	storer := storage.New(ctx, log, cfg)
-	svc := service.New(cfg, log, downloader, storer)
+	storer := storage.New(ctx, log, cfg, nil)
+	svc := service.New(cfg, log, downloader, storer, nil)
 
-	router := httprouter.New(log, nil, svc, storer)
+	router := httprouter.New(log, nil, svc, storer, nil)
 	router.Use(mw1)
 	router.Use(mw2)
 
@@ -310,5 +313,42 @@ func TestChain(t *testing.T) {
 				test.ExpectedUsed,
 				used)
 		}
+	}
+}
+
+func TestRouterMetricsRoute(t *testing.T) {
+	ctx := t.Context()
+
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	cfg := &config.Config{Storage: config.Storage{CleanupInterval: time.Minute}}
+	dl := downloader.NewMock(log)
+	storer := storage.New(ctx, log, cfg, nil)
+	svc := service.New(cfg, log, dl, storer, nil)
+	metrics := observability.New()
+
+	router := httprouter.New(log, cfg, svc, storer, metrics)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/metrics", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d but got %d", http.StatusOK, res.StatusCode)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	if !strings.Contains(string(body), "go_goroutines") {
+		t.Fatalf("expected Go collector metric in response body")
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"daunrodo/internal/depmanager"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/observability"
 	"daunrodo/internal/proxymgr"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/gen"
@@ -56,6 +57,7 @@ type YTdlp struct {
 	cfg      *config.Config
 	depMgr   *depmanager.Manager
 	proxyMgr *proxymgr.Manager
+	metrics  *observability.Metrics
 }
 
 // NewYTdlp creates a new YTdlp downloader instance.
@@ -64,19 +66,36 @@ func NewYTdlp(
 	cfg *config.Config,
 	depMgr *depmanager.Manager,
 	proxyMgr *proxymgr.Manager,
+	metrics *observability.Metrics,
 ) Downloader {
 	return &YTdlp{
 		log:      log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderYTdlp)),
 		cfg:      cfg,
 		depMgr:   depMgr,
 		proxyMgr: proxyMgr,
+		metrics:  metrics,
 	}
 }
 
 // Process processes the download job and updates the job status in the storage.
-func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Storer) error {
+func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Storer) (retErr error) {
+	d.metrics.RecordDownloaderRequest(consts.DownloaderYTdlp, "started")
+
+	defer func() {
+		if retErr != nil {
+			d.metrics.RecordDownloaderRequest(consts.DownloaderYTdlp, "error")
+			d.metrics.RecordDownloaderError(consts.DownloaderYTdlp, classifyProcessingError(retErr))
+
+			return
+		}
+
+		d.metrics.RecordDownloaderRequest(consts.DownloaderYTdlp, "success")
+	}()
+
 	if job == nil {
-		return errs.ErrJobNil
+		retErr = errs.ErrJobNil
+
+		return retErr
 	}
 
 	log := d.log.With(slog.Any("job", job))
@@ -109,16 +128,22 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 	// Set up pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("stdout pipe: %w", err)
+		retErr = fmt.Errorf("stdout pipe: %w", err)
+
+		return retErr
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("stderr pipe: %w", err)
+		retErr = fmt.Errorf("stderr pipe: %w", err)
+
+		return retErr
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start command: %w", err)
+		retErr = fmt.Errorf("start command: %w", err)
+
+		return retErr
 	}
 
 	var (
@@ -144,20 +169,28 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 			slog.Any("error", err),
 			slog.String("stderr", stderrBuf.String()))
 
-		return fmt.Errorf("yt-dlp process: %w", err)
+		retErr = fmt.Errorf("yt-dlp process: %w", err)
+
+		return retErr
 	}
 
 	// Parse results
 	publications, err := d.composePublications(stdoutBuf.String())
 	if err != nil {
-		return fmt.Errorf("compose publications: %w", err)
+		retErr = fmt.Errorf("compose publications: %w", err)
+
+		return retErr
 	}
 
 	log.InfoContext(ctx, "publications composed", "publications", publications)
 
 	if err := storePublications(ctx, job.UUID, publications, storer); err != nil {
-		return fmt.Errorf("store publications: %w", err)
+		retErr = fmt.Errorf("store publications: %w", err)
+
+		return retErr
 	}
+
+	d.metrics.RecordJobDownloadedBytes(totalPublicationSize(publications))
 
 	storer.UpdateJobPublications(ctx, job.UUID, publications)
 
@@ -165,7 +198,7 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 
 	log.InfoContext(ctx, "done")
 
-	return nil
+	return retErr
 }
 
 // GetEstimatedSize fetches format information and estimates the file size.
@@ -438,4 +471,14 @@ func storePublications(ctx context.Context, jobID string, publications []entity.
 	}
 
 	return nil
+}
+
+func totalPublicationSize(publications []entity.Publication) int64 {
+	var total int64
+
+	for _, publication := range publications {
+		total += publication.FileSize
+	}
+
+	return total
 }

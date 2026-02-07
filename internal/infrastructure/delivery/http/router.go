@@ -18,6 +18,7 @@ import (
 	"daunrodo/internal/infrastructure/delivery/http/middleware"
 	"daunrodo/internal/infrastructure/delivery/http/request"
 	"daunrodo/internal/infrastructure/delivery/http/response"
+	"daunrodo/internal/observability"
 	"daunrodo/internal/service"
 	"daunrodo/internal/storage"
 
@@ -51,16 +52,24 @@ type Router struct {
 	isSubRouter bool
 	svc         service.JobManager
 	storer      storage.Storer
+	metrics     *observability.Metrics
 }
 
 // New creates a new Router instance.
-func New(log *slog.Logger, cfg *config.Config, svc service.JobManager, storer storage.Storer) *Router {
+func New(
+	log *slog.Logger,
+	cfg *config.Config,
+	svc service.JobManager,
+	storer storage.Storer,
+	metrics *observability.Metrics,
+) *Router {
 	router := &Router{
 		ServeMux: http.NewServeMux(),
 		log:      log,
 		cfg:      cfg,
 		svc:      svc,
 		storer:   storer,
+		metrics:  metrics,
 	}
 
 	router.SetGlobalMiddlewares()
@@ -116,6 +125,7 @@ func (ro *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // SetGlobalMiddlewares sets the global middlewares for the router.
 func (ro *Router) SetGlobalMiddlewares() {
 	ro.Use(
+		middleware.Prometheus(ro.metrics),
 		middleware.Recoverer,
 		middleware.RequestID,
 		middleware.Logger,
@@ -124,9 +134,19 @@ func (ro *Router) SetGlobalMiddlewares() {
 
 // SetRoutes sets up all the routes for the router.
 func (ro *Router) SetRoutes() {
+	ro.SetRouteMetrics()
 	ro.SetRoutesHealthcheck()
 	ro.SetRoutesJob()
 	ro.SetRoutesFiles()
+}
+
+// SetRouteMetrics exposes Prometheus metrics endpoint.
+func (ro *Router) SetRouteMetrics() {
+	if ro.metrics == nil {
+		return
+	}
+
+	ro.Handle("GET /metrics", ro.metrics.Handler())
 }
 
 // SetRoutesHealthcheck sets up healthcheck routes.

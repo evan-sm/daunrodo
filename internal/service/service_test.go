@@ -33,8 +33,8 @@ func NewTestService(t *testing.T, cfg *config.Config) *service.Job {
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	downloader := downloader.NewMock(log)
-	storage := storage.New(t.Context(), log, NewTestCfg(testConfigPresetDefault))
-	svc := service.New(cfg, log, downloader, storage).(*service.Job)
+	storage := storage.New(t.Context(), log, NewTestCfg(testConfigPresetDefault), nil)
+	svc := service.New(cfg, log, downloader, storage, nil).(*service.Job)
 
 	return svc
 }

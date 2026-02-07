@@ -52,7 +52,7 @@ func TestNew(t *testing.T) {
 				},
 			}
 
-			mgr := proxymgr.New(log, cfg)
+			mgr := proxymgr.New(log, cfg, nil)
 
 			if got := mgr.ProxyCount(); got != tc.wantCount {
 				t.Errorf("ProxyCount() = %d, want %d", got, tc.wantCount)
@@ -101,7 +101,7 @@ func TestGetRandomProxy(t *testing.T) {
 				},
 			}
 
-			mgr := proxymgr.New(log, cfg)
+			mgr := proxymgr.New(log, cfg, nil)
 			got := mgr.GetRandomProxy()
 
 			if tc.wantEmpty && got != "" {
@@ -125,7 +125,7 @@ func TestGetProxy(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 
 	proxy, exists := mgr.GetProxy(testProxyURL)
 	if !exists {
@@ -158,7 +158,7 @@ func TestMarkFailed(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 	proxy := testProxyURL
 
 	for range 3 {
@@ -191,7 +191,7 @@ func TestMarkSuccess(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 	proxy := testProxyURL
 
 	for range 3 {
@@ -222,7 +222,7 @@ func TestRestoreProxy(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 	proxy := testProxyURL
 
 	for range 5 {
@@ -253,7 +253,7 @@ func TestBackoffExpiry(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 	proxy := testProxyURL
 
 	mgr.MarkFailed(proxy)
@@ -281,7 +281,7 @@ func TestMarkFailedNonExistent(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 	mgr.MarkFailed("socks5h://nonexistent:1080")
 }
 
@@ -297,7 +297,7 @@ func TestGetStats(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 
 	stats := mgr.GetStats()
 
@@ -327,7 +327,7 @@ func TestStartHealthChecker_NoProxies(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 
 	mgr.StartHealthChecker(t.Context())
 }
@@ -343,7 +343,7 @@ func TestStartHealthChecker_ZeroInterval(t *testing.T) {
 		},
 	}
 
-	mgr := proxymgr.New(log, cfg)
+	mgr := proxymgr.New(log, cfg, nil)
 
 	mgr.StartHealthChecker(t.Context())
 }

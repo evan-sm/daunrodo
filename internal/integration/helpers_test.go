@@ -70,7 +70,7 @@ func newYTdlpIntegrationFixture(t *testing.T, mode string) *ytdlpIntegrationFixt
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	depMgr := depmanager.New(log, cfg)
-	storer := storage.New(t.Context(), log, cfg)
+	storer := storage.New(t.Context(), log, cfg, nil)
 
 	fakeBinaryPath := depMgr.GetBinaryPath(depmanager.BinaryYTdlp)
 	if err := os.WriteFile(fakeBinaryPath, []byte(fakeYTDLPScript), 0o755); err != nil {
@@ -81,7 +81,7 @@ func newYTdlpIntegrationFixture(t *testing.T, mode string) *ytdlpIntegrationFixt
 	t.Setenv("DAUNRODO_FAKE_MODE", mode)
 	t.Setenv("DAUNRODO_FAKE_OUTPUT_FILE", outputFile)
 
-	dl := downloader.NewYTdlp(log, cfg, depMgr, nil)
+	dl := downloader.NewYTdlp(log, cfg, depMgr, nil, nil)
 
 	return &ytdlpIntegrationFixture{
 		cfg:        cfg,
