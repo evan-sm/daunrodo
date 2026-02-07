@@ -3,9 +3,7 @@
 This repo is a Go 1.25+ self-hosted HTTP API around `yt-dlp` for media downloads.
 
 ## Quick Commands
-- Build: `go build -o app` or `go build -ldflags "-s -w" -o app`
-- Run: `./app` or `go run main.go`
-- Test: `go test -v -cover ./...`
+- Test: `go test -tags=integration -v -race -cover ./...`
 - Lint: `golangci-lint run` (or `task lint`)
 - Docker: `docker build -t daunrodo .`, `docker compose up -d`
 
