@@ -118,20 +118,20 @@ func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage
 	var (
 		stdoutBuf strings.Builder
 		stderrBuf strings.Builder
-		waitGrp   sync.WaitGroup
+		wg        sync.WaitGroup
 	)
 
 	// Read stdout (JSON output)
-	waitGrp.Go(func() {
+	wg.Go(func() {
 		io.Copy(&stdoutBuf, stdout)
 	})
 
 	// Read stderr (progress updates)
-	waitGrp.Go(func() {
+	wg.Go(func() {
 		d.handleProgress(ctx, stderr, &stderrBuf, job, storer)
 	})
 
-	waitGrp.Wait()
+	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
 		log.ErrorContext(ctx, "gallery-dl command failed",

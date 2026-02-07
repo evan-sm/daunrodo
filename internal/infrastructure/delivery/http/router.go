@@ -337,7 +337,14 @@ func (ro *Router) DownloadPublication(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	fileInfo, _ := file.Stat()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.ErrorContext(ctx, "file stat", slog.Any("error", err))
+		response.InternalServerError(w, "file stat", nil, err)
+
+		return
+	}
+
 	fileName := filepath.Base(publication.Filename)
 
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))

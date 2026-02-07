@@ -42,9 +42,9 @@ type Storage struct {
 // HTTP holds HTTP server configuration.
 type HTTP struct {
 	Port            string        `env:"DAUNRODO_HTTP_PORT"             envDefault:":8080"`
-	HandlerTimeout  time.Duration `env:"DAUNRODO_HTTP_HANDLER_TIMEOUT"  envDefault:"20s"`
 	DownloadTimeout time.Duration `env:"DAUNRODO_HTTP_DOWNLOAD_TIMEOUT" envDefault:"30m"`
 	ShutdownTimeout time.Duration `env:"DAUNRODO_HTTP_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	// HandlerTimeout  time.Duration `env:"DAUNRODO_HTTP_HANDLER_TIMEOUT"  envDefault:"20s"`
 }
 
 // Dir holds directory paths for downloads, cache, and cookie file.
