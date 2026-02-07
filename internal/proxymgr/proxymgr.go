@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"daunrodo/internal/config"
+	"daunrodo/internal/observability"
 )
 
 // ProxyState represents the current state of a proxy.
@@ -43,8 +44,9 @@ type proxyInfo struct {
 
 // Manager manages proxy rotation and health.
 type Manager struct {
-	log *slog.Logger
-	cfg *config.Config
+	log     *slog.Logger
+	cfg     *config.Config
+	metrics *observability.Metrics
 
 	mu      sync.RWMutex
 	proxies map[string]*proxyInfo
@@ -52,10 +54,11 @@ type Manager struct {
 }
 
 // New creates a new proxy manager.
-func New(log *slog.Logger, cfg *config.Config) *Manager {
+func New(log *slog.Logger, cfg *config.Config, metrics *observability.Metrics) *Manager {
 	mgr := &Manager{
 		log:     log.With(slog.String("package", "proxymgr")),
 		cfg:     cfg,
+		metrics: metrics,
 		proxies: make(map[string]*proxyInfo),
 		order:   make([]string, 0, len(cfg.Proxy.Proxies)),
 	}
@@ -68,6 +71,8 @@ func New(log *slog.Logger, cfg *config.Config) *Manager {
 		mgr.order = append(mgr.order, proxy)
 	}
 
+	mgr.metrics.SetProxiesAvailable(len(mgr.order))
+
 	return mgr
 }
 
@@ -75,14 +80,23 @@ func New(log *slog.Logger, cfg *config.Config) *Manager {
 // Returns empty string if no proxies are available.
 func (m *Manager) GetRandomProxy() string {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	available := m.getAvailableProxies()
+	m.metrics.SetProxiesAvailable(len(available))
+
 	if len(available) == 0 {
+		m.mu.Unlock()
+
 		return ""
 	}
 
-	return available[rand.IntN(len(available))]
+	proxy := available[rand.IntN(len(available))]
+
+	m.mu.Unlock()
+
+	m.metrics.RecordProxyRequest(proxyMetricLabel(proxy))
+
+	return proxy
 }
 
 // GetProxy returns a specific proxy if available.
@@ -132,6 +146,9 @@ func (m *Manager) MarkFailed(proxyURL string) {
 			slog.Int("failure_count", info.FailureCount),
 			slog.Duration("backoff", backoff))
 	}
+
+	m.metrics.RecordProxyFailure(proxyMetricLabel(proxyURL))
+	m.metrics.SetProxiesAvailable(len(m.getAvailableProxies()))
 }
 
 // MarkSuccess marks a proxy as successful and resets failure count.
@@ -147,6 +164,8 @@ func (m *Manager) MarkSuccess(proxyURL string) {
 	info.State = ProxyStateAvailable
 	info.FailureCount = 0
 	info.BackoffUntil = time.Time{}
+
+	m.metrics.SetProxiesAvailable(len(m.getAvailableProxies()))
 }
 
 // RestoreProxy manually restores a failed proxy.
@@ -162,6 +181,8 @@ func (m *Manager) RestoreProxy(proxyURL string) {
 	info.State = ProxyStateAvailable
 	info.FailureCount = 0
 	info.BackoffUntil = time.Time{}
+
+	m.metrics.SetProxiesAvailable(len(m.getAvailableProxies()))
 
 	m.log.Info("proxy restored", slog.String("proxy", proxyURL))
 }
@@ -305,4 +326,13 @@ func (m *Manager) checkAllProxies(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func proxyMetricLabel(proxyURL string) string {
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil || parsedURL.Host == "" {
+		return "unknown"
+	}
+
+	return parsedURL.Host
 }

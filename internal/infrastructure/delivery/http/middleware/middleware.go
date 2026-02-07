@@ -6,7 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"daunrodo/internal/observability"
+
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type contextKey string
@@ -73,4 +76,20 @@ func Logger(next http.Handler) http.Handler {
 			}))
 		next.ServeHTTP(w, r)
 	})
+}
+
+// Prometheus instruments HTTP requests using Prometheus native middleware.
+func Prometheus(metrics *observability.Metrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if metrics == nil {
+			return next
+		}
+
+		handler := promhttp.InstrumentHandlerResponseSize(metrics.HTTPResponseSize, next)
+		handler = promhttp.InstrumentHandlerDuration(metrics.HTTPRequestDuration, handler)
+		handler = promhttp.InstrumentHandlerCounter(metrics.HTTPRequestsTotal, handler)
+		handler = promhttp.InstrumentHandlerInFlight(metrics.HTTPInFlight, handler)
+
+		return handler
+	}
 }

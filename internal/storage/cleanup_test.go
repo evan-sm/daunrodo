@@ -119,7 +119,7 @@ func TestCleanupExpiredJobs(t *testing.T) {
 
 				jobs := []entity.Job{expiredJob, newJob, newJob2Files}
 
-				storer := storage.New(ctx, log, tt.cfg)
+				storer := storage.New(ctx, log, tt.cfg, nil)
 
 				for _, job := range jobs {
 					storer.SetJob(ctx, job)

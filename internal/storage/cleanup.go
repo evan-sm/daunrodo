@@ -92,6 +92,9 @@ func (stg *storage) cleanupJob(ctx context.Context, job entity.Job) {
 	}
 
 	delete(stg.jobs, job.UUID)
+	stg.updateStoredGaugesLocked()
+
+	stg.metrics.RecordCleanup(1, deletedFiles)
 
 	log.DebugContext(ctx, "job cleaned up",
 		slog.String("job_id", job.UUID),
