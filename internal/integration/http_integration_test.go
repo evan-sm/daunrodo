@@ -49,11 +49,11 @@ func newHTTPIntegrationFixture(
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	svc := service.New(base.cfg, log, base.downloader, base.storer)
+	svc := service.New(base.cfg, log, base.downloader, base.storer, nil)
 	workerCtx, cancel := context.WithCancel(t.Context())
 	svc.Start(workerCtx)
 
-	router := httprouter.New(log, base.cfg, svc, base.storer)
+	router := httprouter.New(log, base.cfg, svc, base.storer, nil)
 	server := httptest.NewServer(router)
 	client := server.Client()
 	client.Timeout = 3 * time.Second

@@ -21,6 +21,7 @@ import (
 	"daunrodo/internal/depmanager"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/observability"
 	"daunrodo/internal/proxymgr"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/gen"
@@ -45,6 +46,7 @@ type GalleryDL struct {
 	cfg      *config.Config
 	depMgr   *depmanager.Manager
 	proxyMgr *proxymgr.Manager
+	metrics  *observability.Metrics
 }
 
 // GalleryDLResult represents the JSON output from gallery-dl.
@@ -68,19 +70,36 @@ func NewGalleryDL(
 	cfg *config.Config,
 	depMgr *depmanager.Manager,
 	proxyMgr *proxymgr.Manager,
+	metrics *observability.Metrics,
 ) Downloader {
 	return &GalleryDL{
 		log:      log.With(slog.String("package", "downloader"), slog.String("downloader", consts.DownloaderGalleryDL)),
 		cfg:      cfg,
 		depMgr:   depMgr,
 		proxyMgr: proxyMgr,
+		metrics:  metrics,
 	}
 }
 
 // Process processes the download job using gallery-dl.
-func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage.Storer) error {
+func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage.Storer) (retErr error) {
+	d.metrics.RecordDownloaderRequest(consts.DownloaderGalleryDL, "started")
+
+	defer func() {
+		if retErr != nil {
+			d.metrics.RecordDownloaderRequest(consts.DownloaderGalleryDL, "error")
+			d.metrics.RecordDownloaderError(consts.DownloaderGalleryDL, classifyProcessingError(retErr))
+
+			return
+		}
+
+		d.metrics.RecordDownloaderRequest(consts.DownloaderGalleryDL, "success")
+	}()
+
 	if job == nil {
-		return errs.ErrJobNil
+		retErr = errs.ErrJobNil
+
+		return retErr
 	}
 
 	log := d.log.With(slog.Any("job", job))
@@ -103,16 +122,22 @@ func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage
 	// Set up pipes
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("stdout pipe: %w", err)
+		retErr = fmt.Errorf("stdout pipe: %w", err)
+
+		return retErr
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("stderr pipe: %w", err)
+		retErr = fmt.Errorf("stderr pipe: %w", err)
+
+		return retErr
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start command: %w", err)
+		retErr = fmt.Errorf("start command: %w", err)
+
+		return retErr
 	}
 
 	var (
@@ -138,20 +163,28 @@ func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage
 			slog.Any("error", err),
 			slog.String("stderr", stderrBuf.String()))
 
-		return fmt.Errorf("gallery-dl process: %w", err)
+		retErr = fmt.Errorf("gallery-dl process: %w", err)
+
+		return retErr
 	}
 
 	// Parse results
 	publications, err := d.composePublications(ctx, stdoutBuf.String())
 	if err != nil {
-		return fmt.Errorf("compose publications: %w", err)
+		retErr = fmt.Errorf("compose publications: %w", err)
+
+		return retErr
 	}
 
 	log.InfoContext(ctx, "publications composed", "publications", publications)
 
 	if err := storePublications(ctx, job.UUID, publications, storer); err != nil {
-		return fmt.Errorf("store publications: %w", err)
+		retErr = fmt.Errorf("store publications: %w", err)
+
+		return retErr
 	}
+
+	d.metrics.RecordJobDownloadedBytes(totalPublicationSize(publications))
 
 	storer.UpdateJobPublications(ctx, job.UUID, publications)
 
@@ -159,7 +192,7 @@ func (d *GalleryDL) Process(ctx context.Context, job *entity.Job, storer storage
 
 	log.InfoContext(ctx, "done")
 
-	return nil
+	return retErr
 }
 
 func (d *GalleryDL) buildArgs(job *entity.Job) []string {

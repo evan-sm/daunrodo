@@ -21,7 +21,7 @@ func TestGetJob(t *testing.T) {
 	cfg := &config.Config{Storage: config.Storage{CleanupInterval: time.Minute}}
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	storer := storage.New(ctx, log, cfg)
+	storer := storage.New(ctx, log, cfg, nil)
 
 	uuid := gen.UUIDv5("a", "b")
 
@@ -55,7 +55,7 @@ func TestUpdateJobStatus(t *testing.T) {
 	cfg := &config.Config{Storage: config.Storage{CleanupInterval: time.Minute}}
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	storer := storage.New(ctx, log, cfg)
+	storer := storage.New(ctx, log, cfg, nil)
 
 	tests := []struct {
 		name     string
@@ -104,7 +104,7 @@ func TestSetGetPublication(t *testing.T) {
 	cfg := &config.Config{Storage: config.Storage{CleanupInterval: time.Minute}}
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	storer := storage.New(t.Context(), log, cfg)
+	storer := storage.New(t.Context(), log, cfg, nil)
 
 	tests := []struct {
 		name        string

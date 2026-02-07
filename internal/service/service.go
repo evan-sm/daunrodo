@@ -7,6 +7,7 @@ import (
 	"daunrodo/internal/downloader"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/observability"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/gen"
 	"daunrodo/pkg/urls"
@@ -24,6 +25,7 @@ type Job struct {
 	JobQueue   chan *entity.Job
 	Storer     storage.Storer
 	Downloader downloader.Downloader
+	metrics    *observability.Metrics
 
 	wg        sync.WaitGroup
 	closed    atomic.Bool
@@ -40,13 +42,20 @@ type JobManager interface {
 var _ JobManager = (*Job)(nil)
 
 // New creates a new Job service instance.
-func New(cfg *config.Config, log *slog.Logger, downloader downloader.Downloader, storer storage.Storer) JobManager {
+func New(
+	cfg *config.Config,
+	log *slog.Logger,
+	downloader downloader.Downloader,
+	storer storage.Storer,
+	metrics *observability.Metrics,
+) JobManager {
 	return &Job{
 		JobQueue:   make(chan *entity.Job, cfg.Job.QueueSize),
 		Downloader: downloader,
 		Storer:     storer,
 		Cfg:        cfg,
 		log:        log,
+		metrics:    metrics,
 	}
 }
 
@@ -88,6 +97,8 @@ func (svc *Job) Enqueue(ctx context.Context, url, preset string) (*entity.Job, e
 
 	select {
 	case svc.JobQueue <- &job:
+		svc.metrics.RecordJobCreated()
+
 		return &job, nil
 	case <-ctx.Done():
 		return nil, fmt.Errorf("enqueue job canceled: %w", ctx.Err())
@@ -136,6 +147,11 @@ func (svc *Job) processJob(ctx context.Context, job *entity.Job) {
 		return
 	}
 
+	svc.metrics.RecordJobStarted()
+	finishTimer := svc.metrics.JobTimer()
+
+	defer finishTimer()
+
 	jobCtx, cancel := context.WithTimeout(ctx, svc.Cfg.Job.Timeout)
 	defer cancel()
 
@@ -149,15 +165,19 @@ func (svc *Job) processJob(ctx context.Context, job *entity.Job) {
 		if jobCtx.Err() == context.Canceled {
 			log.InfoContext(ctx, "job cancelled", slog.Any("job_id", job.UUID))
 			svc.Storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusCancelled, 0, "job cancelled by user")
+			svc.metrics.RecordJobCancelled()
 
 			return
 		}
 
 		log.ErrorContext(ctx, "downloader process", slog.Any("error", err))
 		svc.Storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusError, 0, err.Error())
+		svc.metrics.RecordJobFailed()
 
 		return
 	}
+
+	svc.metrics.RecordJobCompleted()
 
 	log.DebugContext(ctx, "job processed", "job", job)
 }

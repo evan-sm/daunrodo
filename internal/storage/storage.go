@@ -9,6 +9,7 @@ import (
 	"daunrodo/internal/config"
 	"daunrodo/internal/entity"
 	"daunrodo/internal/errs"
+	"daunrodo/internal/observability"
 	"daunrodo/pkg/gen"
 	"daunrodo/pkg/urls"
 )
@@ -37,8 +38,9 @@ type Storer interface { //nolint:interfacebloat
 }
 
 type storage struct {
-	log *slog.Logger
-	cfg *config.Config
+	log     *slog.Logger
+	cfg     *config.Config
+	metrics *observability.Metrics
 
 	mu           sync.Mutex
 	jobs         map[string]entity.Job          // job UUID : job
@@ -49,14 +51,17 @@ type storage struct {
 }
 
 // New creates a new in-memory storage instance.
-func New(ctx context.Context, log *slog.Logger, cfg *config.Config) Storer {
+func New(ctx context.Context, log *slog.Logger, cfg *config.Config, metrics *observability.Metrics) Storer {
 	storage := &storage{
 		log:          log,
 		cfg:          cfg,
+		metrics:      metrics,
 		jobs:         make(map[string]entity.Job),
 		publications: make(map[string]*entity.Publication),
 		cancelFuncs:  make(map[string]context.CancelFunc),
 	}
+
+	storage.updateStoredGaugesLocked()
 
 	go storage.CleanupExpiredJobs(ctx, cfg.Storage.CleanupInterval)
 
@@ -75,6 +80,7 @@ func (stg *storage) SetJob(ctx context.Context, job entity.Job) {
 	defer stg.mu.Unlock()
 
 	stg.jobs[job.UUID] = copyJob(job)
+	stg.updateStoredGaugesLocked()
 }
 
 // GetJobByURLAndPreset retrieves a job by its URL and preset.
@@ -190,6 +196,7 @@ func (stg *storage) SetPublication(ctx context.Context, jobID string, publicatio
 	}
 
 	stg.publications[publication.UUID] = publication
+	stg.updateStoredGaugesLocked()
 
 	stg.log.DebugContext(ctx, "publication stored", slog.Any("publication", publication))
 
@@ -341,4 +348,9 @@ func copyJob(job entity.Job) entity.Job {
 	}
 
 	return job
+}
+
+func (stg *storage) updateStoredGaugesLocked() {
+	stg.metrics.SetStoredJobs(len(stg.jobs))
+	stg.metrics.SetStoredPublications(len(stg.publications))
 }
