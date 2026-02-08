@@ -76,8 +76,8 @@ type Publication struct {
 	Title        string `json:"title"`
 	Description  string `json:"description"`
 	Author       string `json:"author"`
-	ViewCount    int    `json:"viewCount"`
-	LikeCount    int    `json:"likeCount"`
+	ViewCount    int64  `json:"viewCount"`
+	LikeCount    int64  `json:"likeCount"`
 	ThumbnailURL string `json:"thumbnailUrl"`
 	// Files        []File `json:"files"` // Associated files
 	FileSize int64  `json:"fileSize"`
@@ -101,8 +101,8 @@ func (p Publication) LogValue() slog.Value {
 		slog.String("title", p.Title),
 		slog.String("description", p.Description),
 		slog.String("author", p.Author),
-		slog.Int("viewCount", p.ViewCount),
-		slog.Int("likeCount", p.LikeCount),
+		slog.Int64("viewCount", p.ViewCount),
+		slog.Int64("likeCount", p.LikeCount),
 		slog.String("thumbnail_url", p.ThumbnailURL),
 		slog.Int64("file_size", p.FileSize),
 		slog.Int("duration", p.Duration),

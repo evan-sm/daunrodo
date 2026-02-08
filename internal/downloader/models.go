@@ -1,20 +1,20 @@
 package downloader
 
-import "strconv"
-
 // ResultJSON represents the JSON output from yt-dlp.
 type ResultJSON struct {
 	Type               string    `json:"_type"`
 	ID                 string    `json:"id"`
 	Title              string    `json:"title"`
 	Description        string    `json:"description"`
+	Ext                string    `json:"ext"`
 	Timestamp          int       `json:"timestamp"`
+	Duration           float64   `json:"duration"`
 	Channel            string    `json:"channel"`
 	Uploader           string    `json:"uploader"`
 	UploaderID         string    `json:"uploader_id"`
-	ViewCount          any       `json:"view_count"`
-	LikeCount          int       `json:"like_count"`
-	CommentCount       int       `json:"comment_count"`
+	ViewCount          int64     `json:"view_count"`
+	LikeCount          int64     `json:"like_count"`
+	CommentCount       int64     `json:"comment_count"`
 	PostExtractor      any       `json:"__post_extractor"`
 	Entries            []Entries `json:"entries"`
 	Thumbnail          string    `json:"thumbnail"`
@@ -29,6 +29,12 @@ type ResultJSON struct {
 	PlaylistCount      int       `json:"playlist_count"`
 	Epoch              int       `json:"epoch"`
 	Version            Version   `json:"_version"`
+	VCodec             string    `json:"vcodec"`
+	ACodec             string    `json:"acodec"`
+	Width              int       `json:"width"`
+	Height             int       `json:"height"`
+	Filesize           int64     `json:"filesize"`
+	Format             string    `json:"format"`
 	Filename           string    `json:"filename"`
 }
 
@@ -46,20 +52,20 @@ func (res *ResultJSON) GetThumbnail() string {
 }
 
 // GetViewCount returns the view count as an integer.
-func (res *ResultJSON) GetViewCount() int {
-	switch val := res.ViewCount.(type) {
-	case int:
-		return val
-	case float64:
-		return int(val)
-	case string:
-		i, _ := strconv.Atoi(val)
+// func (res *ResultJSON) GetViewCount() int {
+// 	switch val := res.ViewCount.(type) {
+// 	case int:
+// 		return val
+// 	case float64:
+// 		return int(val)
+// 	case string:
+// 		i, _ := strconv.Atoi(val)
 
-		return i
-	default:
-		return 0
-	}
-}
+// 		return i
+// 	default:
+// 		return 0
+// 	}
+// }
 
 // Entries represents an entry in a playlist or multiple entries result.
 type Entries struct {
@@ -73,7 +79,7 @@ type Entries struct {
 	ViewCount          any     `json:"view_count"`
 	LikeCount          int     `json:"like_count"`
 	CommentCount       int     `json:"comment_count"`
-	Duration           float64 `json:"duration"`
+	Duration           int     `json:"duration"`
 	PlaylistCount      int     `json:"playlist_count"`
 	Playlist           string  `json:"playlist"`
 	PlaylistID         string  `json:"playlist_id"`
