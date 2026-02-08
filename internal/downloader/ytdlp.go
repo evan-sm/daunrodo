@@ -47,7 +47,7 @@ var (
 	// reProgress is the download progress regex: [download]  50.0%.
 	reProgress = regexp.MustCompile(`\[download\]\s+(\d+\.?\d*)%`)
 
-	// changing this may break parseYtdlpStdout().
+	// changing this may break parsing.
 	defaultPrintAfterMove = "after_move:filepath"
 )
 
@@ -103,7 +103,7 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 	storer.UpdateJobStatus(ctx, job.UUID, entity.JobStatusDownloading, 0, "")
 
 	// Get estimated file size before downloading
-	estimatedSize, err := d.getEstimatedSize(ctx, job.URL, job.Preset)
+	estimatedSize, err := d.getEstimatedSize(ctx, job)
 	if err != nil {
 		log.WarnContext(ctx, "failed to get estimated size", slog.Any("error", err))
 	}
@@ -149,20 +149,20 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 	var (
 		stdoutBuf strings.Builder
 		stderrBuf strings.Builder
-		waitGrp   sync.WaitGroup
+		wg        sync.WaitGroup
 	)
 
 	// Read stdout (JSON output + progress updates)
-	waitGrp.Go(func() {
+	wg.Go(func() {
 		d.handleProgress(ctx, stdout, &stdoutBuf, job, storer)
 	})
 
 	// Read stderr (error output)
-	waitGrp.Go(func() {
+	wg.Go(func() {
 		io.Copy(&stderrBuf, stderr)
 	})
 
-	waitGrp.Wait()
+	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
 		log.ErrorContext(ctx, "yt-dlp command failed",
@@ -202,16 +202,20 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 }
 
 // GetEstimatedSize fetches format information and estimates the file size.
-func (d *YTdlp) getEstimatedSize(ctx context.Context, url, preset string) (int64, error) {
+func (d *YTdlp) getEstimatedSize(ctx context.Context, job *entity.Job) (int64, error) {
+	if job == nil {
+		return 0, errs.ErrJobNil
+	}
+
 	binPath := d.depMgr.GetInstalledPath(depmanager.BinaryYTdlp)
 	if binPath == "" {
 		binPath = d.depMgr.GetBinaryPath(depmanager.BinaryYTdlp)
 	}
 
-	args := []string{
-		"-F", "--no-playlist", "-J",
-		url,
-	}
+	args := d.buildArgs(job)
+	args = append(args, "-j")
+
+	d.log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", shellquote.Join(binPath, args)))
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
 
@@ -250,7 +254,7 @@ func (d *YTdlp) getEstimatedSize(ctx context.Context, url, preset string) (int64
 	// If we have duration but no filesize, estimate based on bitrate
 	if maxSize == 0 && info.Duration > 0 {
 		// Assume ~1MB per minute for audio, ~10MB per minute for video
-		switch preset {
+		switch job.Preset {
 		case "mp3", "aac", "audio":
 			maxSize = int64(info.Duration / 60 * mbPerMinuteAudio)
 		default:

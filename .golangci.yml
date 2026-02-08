@@ -36,6 +36,7 @@ linters:
         - tt
       ignore-decls:
         - c echo.Context
+        - wg sync.WaitGroup
         - t testing.T
         - f *foo.Bar
         - e error
