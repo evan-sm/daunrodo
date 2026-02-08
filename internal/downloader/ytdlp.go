@@ -24,7 +24,7 @@ import (
 	"daunrodo/internal/proxymgr"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/gen"
-	"daunrodo/pkg/shellquote"
+	"daunrodo/pkg/maths"
 )
 
 const fullProgress = 100
@@ -121,9 +121,11 @@ func (d *YTdlp) Process(ctx context.Context, job *entity.Job, storer storage.Sto
 		binPath = d.depMgr.GetBinaryPath(depmanager.BinaryYTdlp)
 	}
 
-	log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", shellquote.Join(binPath, args)))
+	// log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", shellquote.Join(binPath, args)))
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
+
+	log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", cmd.String()))
 
 	// Set up pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -215,9 +217,11 @@ func (d *YTdlp) getEstimatedSize(ctx context.Context, job *entity.Job) (int64, e
 	args := d.buildArgs(job)
 	args = append(args, "-j")
 
-	d.log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", shellquote.Join(binPath, args)))
+	// d.log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", shellquote.Join(binPath, args)))
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
+
+	d.log.DebugContext(ctx, "executing yt-dlp", slog.String("cmd", cmd.String()))
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -409,11 +413,13 @@ func (d *YTdlp) composePublications(stdout string) ([]entity.Publication, error)
 			Description:  res.Description,
 			WebpageURL:   res.WebpageURL,
 			Title:        res.Title,
-			ViewCount:    res.GetViewCount(),
+			ViewCount:    res.ViewCount,
 			LikeCount:    res.LikeCount,
 			ThumbnailURL: res.GetThumbnail(),
 			FileSize:     fileSize,
-			Duration:     res.Timestamp,
+			Duration:     maths.RoundFloat64ToInt(res.Duration),
+			Width:        res.Width,
+			Height:       res.Height,
 			Filename:     res.Filename,
 		}
 
@@ -443,7 +449,9 @@ func ParseYtdlpStdout(stdout string) ([]ResultJSON, error) {
 		}
 
 		var r ResultJSON
-		if err := json.Unmarshal([]byte(line), &r); err == nil {
+
+		err := json.Unmarshal([]byte(line), &r)
+		if err == nil {
 			res = append(res, r)
 			resultNo++
 
