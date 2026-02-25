@@ -17,6 +17,7 @@ import (
 	"daunrodo/internal/depmanager"
 	"daunrodo/internal/downloader"
 	"daunrodo/internal/entity"
+	"daunrodo/internal/observability"
 	"daunrodo/internal/storage"
 	"daunrodo/pkg/gen"
 )
@@ -69,7 +70,7 @@ func newYTdlpIntegrationFixture(t *testing.T, mode string) *ytdlpIntegrationFixt
 	cfg.Job.Timeout = 5 * time.Second
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	depMgr := depmanager.New(log, cfg)
+	depMgr := depmanager.New(log, cfg, observability.New())
 	storer := storage.New(t.Context(), log, cfg, nil)
 
 	fakeBinaryPath := depMgr.GetBinaryPath(depmanager.BinaryYTdlp)

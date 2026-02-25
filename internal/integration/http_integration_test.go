@@ -105,7 +105,7 @@ func postEnqueue(t *testing.T, fx *httpIntegrationFixture, url, preset string) (
 func getJob(t *testing.T, fx *httpIntegrationFixture, jobID string) (int, entity.Job) {
 	t.Helper()
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fx.url+"/v1/jobs/"+jobID, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fx.url+"/v1/jobs/"+jobID, http.NoBody)
 	if err != nil {
 		t.Fatalf("new get job request: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestHTTPEnqueuePollAndDownload(t *testing.T) {
 
 	publication := job.Publications[0]
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fx.url+"/v1/files/"+publication.UUID, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fx.url+"/v1/files/"+publication.UUID, http.NoBody)
 	if err != nil {
 		t.Fatalf("new file download request: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestHTTPCancelRunningJob(t *testing.T) {
 	jobID := decodeJobID(t, enqueueResp)
 	_ = waitForJobStatus(t, fx, jobID, 5*time.Second, entity.JobStatusDownloading)
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, fx.url+"/v1/jobs/"+jobID, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, fx.url+"/v1/jobs/"+jobID, http.NoBody)
 	if err != nil {
 		t.Fatalf("new cancel request: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestHTTPDownloadPublicationFileNotFound(t *testing.T) {
 	}
 
 	pubID := job.Publications[0].UUID
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fx.url+"/v1/files/"+pubID, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fx.url+"/v1/files/"+pubID, http.NoBody)
 	if err != nil {
 		t.Fatalf("new file request: %v", err)
 	}

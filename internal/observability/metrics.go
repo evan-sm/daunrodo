@@ -44,6 +44,9 @@ type Metrics struct {
 	// Downloader metrics
 	DownloaderRequestsTotal *prometheus.CounterVec
 	DownloaderErrors        *prometheus.CounterVec
+
+	// Dependency manager metrics
+	DependencyBinaryDownloadsTotal *prometheus.CounterVec
 }
 
 // New creates and registers all application metrics.
@@ -185,6 +188,14 @@ func New() *Metrics {
 			Name:      "errors_total",
 			Help:      "Total number of download errors",
 		}, []string{"downloader", "error_type"}),
+
+		// Dependency manager metrics
+		DependencyBinaryDownloadsTotal: factory.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "daunrodo",
+			Subsystem: "depmanager",
+			Name:      "binary_downloads_total",
+			Help:      "Total number of successful dependency binary downloads and installs",
+		}, []string{"binary", "reason"}),
 	}
 
 	return metrics
@@ -315,6 +326,15 @@ func (m *Metrics) RecordDownloaderError(downloader, errorType string) {
 	}
 
 	m.DownloaderErrors.WithLabelValues(downloader, errorType).Inc()
+}
+
+// RecordDependencyBinaryDownload records a successful dependency binary download.
+func (m *Metrics) RecordDependencyBinaryDownload(binary, reason string) {
+	if m == nil {
+		return
+	}
+
+	m.DependencyBinaryDownloadsTotal.WithLabelValues(binary, reason).Inc()
 }
 
 // RecordProxyRequest records a proxy request.

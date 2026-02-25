@@ -154,7 +154,7 @@ func TestRouter(t *testing.T) {
 	for _, test := range tests {
 		used = ""
 
-		req, err := http.NewRequestWithContext(ctx, test.RequestMethod, test.RequestPath, nil)
+		req, err := http.NewRequestWithContext(ctx, test.RequestMethod, test.RequestPath, http.NoBody)
 		if err != nil {
 			t.Errorf("NewRequest: %s", err)
 		}
@@ -288,7 +288,7 @@ func TestChain(t *testing.T) {
 	for _, test := range tests {
 		used = ""
 
-		r, err := http.NewRequestWithContext(ctx, test.RequestMethod, test.RequestPath, nil)
+		r, err := http.NewRequestWithContext(ctx, test.RequestMethod, test.RequestPath, http.NoBody)
 		if err != nil {
 			t.Errorf("NewRequest: %s", err)
 		}
@@ -328,7 +328,7 @@ func TestRouterMetricsRoute(t *testing.T) {
 
 	router := httprouter.New(log, cfg, svc, storer, metrics)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/metrics", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/metrics", http.NoBody)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}

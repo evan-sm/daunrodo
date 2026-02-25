@@ -38,8 +38,8 @@ func main() {
 		slog.WarnContext(ctx, "logger level invalid; defaulting to info", slog.Any("error", err))
 	}
 
-	depMgr := depmanager.New(log, cfg)
 	metrics := observability.New()
+	depMgr := depmanager.New(log, cfg, metrics)
 
 	log.InfoContext(ctx, "checking if yt-dlp, gallery-dl, deno are installed. it may take some time...")
 
