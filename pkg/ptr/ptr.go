@@ -13,4 +13,6 @@ func Deref[T any](ptr *T) T {
 }
 
 // Of returns a pointer to the given value.
-func Of[T any](s T) *T { return &s }
+//
+//go:fix inline
+func Of[T any](s T) *T { return new(s) }

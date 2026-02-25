@@ -1,6 +1,6 @@
 module daunrodo
 
-go 1.25
+go 1.26
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
@@ -18,6 +18,6 @@ require (
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
