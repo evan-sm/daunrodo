@@ -2,6 +2,8 @@
 package depmanager
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +19,7 @@ import (
 	"time"
 
 	"daunrodo/internal/config"
+	"daunrodo/internal/observability"
 )
 
 type rtFunc func(*http.Request) (*http.Response, error)
@@ -79,7 +82,7 @@ def456abc789012345678901234567890123456789012345678901234567efgh  another_valid`
 
 			log := slog.Default()
 			cfg := &config.Config{}
-			mgr := New(log, cfg)
+			mgr := New(log, cfg, nil)
 
 			err := mgr.ParseSHASums(tc.content)
 			if err != nil {
@@ -142,7 +145,7 @@ func TestGetBinaryPath(t *testing.T) {
 					BinsDir: tc.binsDir,
 				},
 			}
-			mgr := New(log, cfg)
+			mgr := New(log, cfg, nil)
 			mgr.platform.OS = tc.os
 
 			got := mgr.GetBinaryPath(tc.binary)
@@ -172,7 +175,7 @@ def456abc789012345678901234567890123456789012345678901234567efgh  yt-dlp_linux`
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -202,7 +205,7 @@ func TestFetchSHASums_ServerError(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -233,7 +236,7 @@ func TestDownloadDependency(t *testing.T) {
 		},
 	}
 
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -303,7 +306,7 @@ func TestSelectURL(t *testing.T) {
 
 			log := slog.Default()
 			cfg := &config.Config{}
-			mgr := New(log, cfg)
+			mgr := New(log, cfg, nil)
 			mgr.platform = tc.platform
 
 			got := mgr.selectURL(tc.linuxARM, tc.linuxAMD)
@@ -385,7 +388,7 @@ func TestGetDownloadFilename(t *testing.T) {
 
 			log := slog.Default()
 			cfg := &config.Config{}
-			mgr := New(log, cfg)
+			mgr := New(log, cfg, nil)
 			mgr.platform = tc.platform
 
 			got := mgr.getDownloadFilename(tc.binary)
@@ -413,7 +416,7 @@ func TestBinaryExists(t *testing.T) {
 			BinsDir: tmpDir,
 		},
 	}
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 	mgr.platform.OS = "linux"
 
 	// Test existing binary
@@ -432,7 +435,7 @@ func TestFindUpdates(t *testing.T) {
 
 	log := slog.Default()
 	cfg := &config.Config{}
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 	mgr.platform = Platform{OS: "linux", Arch: "amd64"}
 
 	// Set up saved sums (old)
@@ -457,7 +460,7 @@ func TestFindUpdates_NoChanges(t *testing.T) {
 
 	log := slog.Default()
 	cfg := &config.Config{}
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 	mgr.platform = Platform{OS: "linux", Arch: "amd64"}
 
 	hash := "samehash1234567890123456789012345678901234567890123456789012"
@@ -488,7 +491,7 @@ func TestSaveAndLoadSums(t *testing.T) {
 			BinsDir: tmpDir,
 		},
 	}
-	mgr := New(log, cfg)
+	mgr := New(log, cfg, nil)
 
 	// Set some checksums
 	mgr.shaSums = map[string]string{
@@ -508,7 +511,7 @@ func TestSaveAndLoadSums(t *testing.T) {
 	}
 
 	// Create new manager and load
-	mgr2 := New(log, cfg)
+	mgr2 := New(log, cfg, nil)
 	if err := mgr2.loadSavedSums(); err != nil {
 		t.Fatalf("failed to load sums: %v", err)
 	}
@@ -572,7 +575,7 @@ func TestCollectSHASumsURLs(t *testing.T) {
 
 			log := slog.Default()
 			cfg := &config.Config{DepManager: tc.cfg}
-			mgr := New(log, cfg)
+			mgr := New(log, cfg, nil)
 
 			urls, err := mgr.CollectSHASumsURLs()
 			if (err != nil) != tc.wantErr {
@@ -618,7 +621,8 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 			},
 		}
 
-		mgr := New(slog.Default(), cfg)
+		metrics := observability.New()
+		mgr := New(slog.Default(), cfg, metrics)
 		mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
 		mgr.savedSums = map[string]string{filename: oldHash}
 
@@ -637,6 +641,11 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 
 		if got := mgr.savedSums[filename]; got != newHash {
 			t.Fatalf("saved checksum mismatch: got %s, want %s", got, newHash)
+		}
+
+		gotMetrics := binaryDownloadMetrics(t, metrics)
+		if got := gotMetrics["yt-dlp|update"]; got != 1 {
+			t.Fatalf("update metric mismatch: got %v, want 1", got)
 		}
 	})
 }
@@ -662,7 +671,7 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 			},
 		}
 
-		mgr := New(slog.Default(), cfg)
+		mgr := New(slog.Default(), cfg, nil)
 		mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
 		mgr.savedSums = map[string]string{filename: oldHash}
 
@@ -705,4 +714,182 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 			t.Fatalf("saved checksum mismatch: got %s, want %s", got, newHash)
 		}
 	})
+}
+
+func TestInstallAll_RecordsInstallMetric(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("yt-dlp binary"))
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		DepManager: config.DepManager{
+			BinsDir:         tmpDir,
+			YTdlpLinuxAMD64: server.URL,
+		},
+	}
+
+	for _, name := range []string{"ffmpeg", "deno", "gallery-dl"} {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0o755); err != nil {
+			t.Fatalf("write existing binary %s: %v", name, err)
+		}
+	}
+
+	metrics := observability.New()
+	mgr := New(slog.Default(), cfg, metrics)
+	mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
+
+	if err := mgr.InstallAll(t.Context()); err != nil {
+		t.Fatalf("InstallAll() unexpected error: %v", err)
+	}
+
+	gotMetrics := binaryDownloadMetrics(t, metrics)
+	if got := gotMetrics["yt-dlp|install"]; got != 1 {
+		t.Fatalf("install metric mismatch: got %v, want 1", got)
+	}
+}
+
+func TestInstallAll_SkipExistingBinaryDoesNotRecordMetric(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	for _, name := range []string{"ffmpeg", "deno", "gallery-dl", "yt-dlp"} {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0o755); err != nil {
+			t.Fatalf("write existing binary %s: %v", name, err)
+		}
+	}
+
+	cfg := &config.Config{
+		DepManager: config.DepManager{
+			BinsDir: tmpDir,
+		},
+	}
+
+	metrics := observability.New()
+	mgr := New(slog.Default(), cfg, metrics)
+	mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
+
+	if err := mgr.InstallAll(t.Context()); err != nil {
+		t.Fatalf("InstallAll() unexpected error: %v", err)
+	}
+
+	gotMetrics := binaryDownloadMetrics(t, metrics)
+	if len(gotMetrics) != 0 {
+		t.Fatalf("expected no metrics for skipped binaries, got %v", gotMetrics)
+	}
+}
+
+func TestInstallAll_ArchiveBinaryRecordsManagedBinaryOnly(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	archive, err := createZipArchive(map[string]string{
+		"ffmpeg":  "ffmpeg binary",
+		"ffprobe": "ffprobe binary",
+	})
+	if err != nil {
+		t.Fatalf("create zip archive: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ffmpeg.zip" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(archive)
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		DepManager: config.DepManager{
+			BinsDir:          tmpDir,
+			FFmpegLinuxAMD64: server.URL + "/ffmpeg.zip",
+		},
+	}
+
+	for _, name := range []string{"deno", "gallery-dl", "yt-dlp"} {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0o755); err != nil {
+			t.Fatalf("write existing binary %s: %v", name, err)
+		}
+	}
+
+	metrics := observability.New()
+	mgr := New(slog.Default(), cfg, metrics)
+	mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
+
+	if err := mgr.InstallAll(t.Context()); err != nil {
+		t.Fatalf("InstallAll() unexpected error: %v", err)
+	}
+
+	gotMetrics := binaryDownloadMetrics(t, metrics)
+	if got := gotMetrics["ffmpeg|install"]; got != 1 {
+		t.Fatalf("archive install metric mismatch: got %v, want 1", got)
+	}
+
+	if _, ok := gotMetrics["ffprobe|install"]; ok {
+		t.Fatalf("unexpected ffprobe metric: %v", gotMetrics)
+	}
+}
+
+func binaryDownloadMetrics(t *testing.T, metrics *observability.Metrics) map[string]float64 {
+	t.Helper()
+
+	families, err := metrics.Registry().Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+
+	result := make(map[string]float64)
+
+	for _, family := range families {
+		if family.GetName() != "daunrodo_depmanager_binary_downloads_total" {
+			continue
+		}
+
+		for _, metric := range family.GetMetric() {
+			labels := make(map[string]string)
+
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+
+			key := labels["binary"] + "|" + labels["reason"]
+			result[key] = metric.GetCounter().GetValue()
+		}
+	}
+
+	return result
+}
+
+func createZipArchive(files map[string]string) ([]byte, error) {
+	var buf bytes.Buffer
+
+	writer := zip.NewWriter(&buf)
+
+	for name, content := range files {
+		fileWriter, err := writer.Create(name)
+		if err != nil {
+			return nil, fmt.Errorf("writer create: %w", err)
+		}
+
+		if _, err := fileWriter.Write([]byte(content)); err != nil {
+			return nil, fmt.Errorf("writer write: %w", err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("writer close: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
