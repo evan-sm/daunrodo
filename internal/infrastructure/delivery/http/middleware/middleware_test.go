@@ -75,6 +75,7 @@ func TestRecoverer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
 			called := false
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +85,7 @@ func TestRecoverer(t *testing.T) {
 			})
 
 			middleware := middleware.Recoverer(next)
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 
 			if tt.wantPanic != nil {
@@ -116,6 +117,8 @@ func TestRecoverer(t *testing.T) {
 }
 
 func TestLogger(t *testing.T) {
+	ctx := t.Context()
+
 	var buf bytes.Buffer
 
 	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -131,7 +134,7 @@ func TestLogger(t *testing.T) {
 
 	logger := middleware.Logger(next)
 
-	req := httptest.NewRequest(http.MethodPost, "http://example.com/foo?bar=baz", nil)
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "http://example.com/foo?bar=baz", nil)
 	req.RemoteAddr = "1.2.3.4:1234"
 	req.Proto = "HTTP/1.1"
 	req.ContentLength = 123
@@ -222,6 +225,7 @@ func TestRequestID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
 			ctxChecked := false
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +243,7 @@ func TestRequestID(t *testing.T) {
 				w.Write([]byte("ok"))
 			})
 
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 			if tt.headerValue != "" {
 				req.Header.Set("X-Request-ID", tt.headerValue)
 			}
