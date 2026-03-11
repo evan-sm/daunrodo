@@ -194,7 +194,7 @@ func TestLogger(t *testing.T) {
 	}
 
 	if logEntry.Request.ContentLength != 123 {
-		t.Errorf("got %q, want %q", logEntry.Request.ContentLength, 123)
+		t.Errorf("got %d, want %d", logEntry.Request.ContentLength, int64(123))
 	}
 }
 
