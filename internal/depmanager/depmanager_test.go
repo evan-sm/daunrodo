@@ -879,16 +879,16 @@ func createZipArchive(files map[string]string) ([]byte, error) {
 	for name, content := range files {
 		fileWriter, err := writer.Create(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("writer create: %w", err)
 		}
 
 		if _, err := fileWriter.Write([]byte(content)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("writer write: %w", err)
 		}
 	}
 
 	if err := writer.Close(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("writer close: %w", err)
 	}
 
 	return buf.Bytes(), nil
