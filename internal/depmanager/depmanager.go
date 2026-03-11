@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"daunrodo/internal/config"
+	"daunrodo/internal/observability"
 
 	"github.com/ulikunitz/xz"
 )
@@ -79,6 +80,7 @@ func (p Platform) String() string {
 type Manager struct {
 	log      *slog.Logger
 	cfg      *config.Config
+	metrics  *observability.Metrics
 	platform Platform
 	client   *http.Client
 
@@ -91,10 +93,11 @@ type Manager struct {
 }
 
 // New creates a new dependency manager.
-func New(log *slog.Logger, cfg *config.Config) *Manager {
+func New(log *slog.Logger, cfg *config.Config, metrics *observability.Metrics) *Manager {
 	return &Manager{
-		log: log.With(slog.String("package", "depmanager")),
-		cfg: cfg,
+		log:     log.With(slog.String("package", "depmanager")),
+		cfg:     cfg,
+		metrics: metrics,
 		platform: Platform{
 			OS:   runtime.GOOS,
 			Arch: runtime.GOARCH,
@@ -189,6 +192,8 @@ func (m *Manager) InstallAll(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("download and install %s: %w", binary, err)
 		}
+
+		m.metrics.RecordDependencyBinaryDownload(string(binary), "install")
 	}
 
 	log.InfoContext(ctx, "all binaries are installed", slog.Any("binaries", m.binPaths))
@@ -397,6 +402,8 @@ func (m *Manager) checkAndUpdate(ctx context.Context) {
 
 			continue
 		}
+
+		m.metrics.RecordDependencyBinaryDownload(string(binary), "update")
 
 		log.InfoContext(ctx, "update check: binary updated", slog.String("binary", string(binary)))
 	}
@@ -622,7 +629,7 @@ func (m *Manager) selectURL(linuxARM64, linuxAMD64 string) string {
 func (m *Manager) downloadDependency(ctx context.Context, url string, name BinaryName) ([]string, error) {
 	binPath := m.GetBinaryPath(name)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
