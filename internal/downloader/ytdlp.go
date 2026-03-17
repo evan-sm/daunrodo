@@ -281,6 +281,7 @@ func (d *YTdlp) buildArgs(job *entity.Job) []string {
 		"-o", d.cfg.Dir.FilenameTemplate,
 		"--progress",
 		"--newline",
+		"--impersonate=",
 	}
 
 	// Add preset/format
