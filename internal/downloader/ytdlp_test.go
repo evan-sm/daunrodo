@@ -16,6 +16,12 @@ var ytdlpStdoutSingleJSONLineAndFilepath string
 //go:embed testdata/ytdlp_stdout_multiple_json_lines_and_random_lines.json
 var ytdlpStdoutMultipleJSONLinesAndRandomLines string
 
+const (
+	testResultIDOne   = "one"
+	testResultIDTwo   = "two"
+	testFilenameFirst = "/tmp/first.mp4"
+)
+
 func TestParseYtdlpStdout(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -27,22 +33,22 @@ func TestParseYtdlpStdout(t *testing.T) {
 			name:   "single JSON line",
 			stdout: ytdlpStdoutSingleJSONLine,
 			want: []downloader.ResultJSON{
-				{ID: "one", Title: "First", Filename: "/tmp/first.mp4"},
+				{ID: testResultIDOne, Title: "First", Filename: testFilenameFirst},
 			},
 		},
 		{
 			name:   "json then filepath on next line assigns filename",
 			stdout: ytdlpStdoutSingleJSONLineAndFilepath,
 			want: []downloader.ResultJSON{
-				{ID: "x1", Title: "With file", Filename: "/tmp/first.mp4"},
+				{ID: "x1", Title: "With file", Filename: testFilenameFirst},
 			},
 		},
 		{
 			name:   "multiple entries with blanks and stray lines",
 			stdout: ytdlpStdoutMultipleJSONLinesAndRandomLines,
 			want: []downloader.ResultJSON{
-				{ID: "one", Title: "First", Filename: "/tmp/first.mp4"},
-				{ID: "two", Title: "Second", Filename: "/tmp/first.mp4"},
+				{ID: testResultIDOne, Title: "First", Filename: testFilenameFirst},
+				{ID: testResultIDTwo, Title: "Second", Filename: testFilenameFirst},
 			},
 		},
 	}

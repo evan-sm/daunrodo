@@ -56,6 +56,16 @@ var (
 	ErrBinaryNotFound = errors.New("binary not found")
 	// ErrUnsupportedPlatform indicates that the current platform is not supported.
 	ErrUnsupportedPlatform = errors.New("unsupported platform")
+	// ErrInstagramReelShortcode indicates the URL has no Instagram reel shortcode.
+	ErrInstagramReelShortcode = errors.New("instagram reel shortcode missing")
+	// ErrInstagramReelManifest indicates the reel page has no usable DASH manifest.
+	ErrInstagramReelManifest = errors.New("instagram reel dash manifest missing")
+	// ErrInstagramReelAudio indicates the DASH manifest has no audio representation.
+	ErrInstagramReelAudio = errors.New("instagram reel audio representation missing")
+	// ErrInstagramReelVideo indicates the DASH manifest has no video representation.
+	ErrInstagramReelVideo = errors.New("instagram reel video representation missing")
+	// ErrInstagramReelPage indicates the reel HTML page could not be used.
+	ErrInstagramReelPage = errors.New("instagram reel page unavailable")
 )
 
 // Proxy errors.

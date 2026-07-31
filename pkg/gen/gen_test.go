@@ -11,6 +11,8 @@ import (
 
 var namespaceURL = mustParseUUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
+const testKeyFooBar = "foo|bar"
+
 func TestKey(t *testing.T) {
 	tests := []struct {
 		name string
@@ -18,11 +20,11 @@ func TestKey(t *testing.T) {
 		b    string
 		want string
 	}{
-		{name: "basic", a: "foo", b: "bar", want: "foo|bar"},
+		{name: "basic", a: "foo", b: "bar", want: testKeyFooBar},
 		{name: "emptyA", a: "", b: "value", want: "|value"},
 		{name: "emptyB", a: "value", b: "", want: "value|"},
 		{name: "bothEmpty", a: "", b: "", want: "|"},
-		{name: "inputContainsSeparator", a: "foo|bar", b: "baz", want: "foo|bar|baz"},
+		{name: "inputContainsSeparator", a: testKeyFooBar, b: "baz", want: "foo|bar|baz"},
 	}
 
 	for _, tt := range tests {

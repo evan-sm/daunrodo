@@ -21,8 +21,8 @@ func TestSplitLinesAny(t *testing.T) {
 		},
 		{
 			name:  "trailing newline",
-			input: "one\ntwo\n",
-			want:  []string{"one", "two"},
+			input: testResultIDOne + "\n" + testResultIDTwo + "\n",
+			want:  []string{testResultIDOne, testResultIDTwo},
 		},
 		{
 			name:  "single line",

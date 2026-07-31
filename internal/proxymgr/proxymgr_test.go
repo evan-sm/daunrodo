@@ -10,7 +10,11 @@ import (
 )
 
 // testProxyURL is the proxy URL used in tests.
-const testProxyURL = "socks5h://localhost:1080"
+const (
+	testProxyURL  = "socks5h://localhost:1080"
+	testProxy1URL = "socks5h://proxy1:1080"
+	testProxy2URL = "socks5h://proxy2:1080"
+)
 
 func TestNew(t *testing.T) {
 	t.Parallel()
@@ -35,7 +39,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name:      "multiple proxies",
-			proxies:   []string{"socks5h://proxy1:1080", "socks5h://proxy2:1080"},
+			proxies:   []string{testProxy1URL, testProxy2URL},
 			wantCount: 2,
 			wantHas:   true,
 		},
@@ -85,7 +89,7 @@ func TestGetRandomProxy(t *testing.T) {
 		},
 		{
 			name:      "multiple proxies returns one of them",
-			proxies:   []string{"socks5h://proxy1:1080", "socks5h://proxy2:1080"},
+			proxies:   []string{testProxy1URL, testProxy2URL},
 			wantEmpty: false,
 		},
 	}
@@ -291,7 +295,7 @@ func TestGetStats(t *testing.T) {
 	log := slog.Default()
 	cfg := &config.Config{
 		Proxy: config.Proxy{
-			Proxies:        []string{"socks5h://proxy1:1080", "socks5h://proxy2:1080"},
+			Proxies:        []string{testProxy1URL, testProxy2URL},
 			MaxFailures:    3,
 			FailureBackoff: 1 * time.Minute,
 		},

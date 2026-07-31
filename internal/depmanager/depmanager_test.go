@@ -22,6 +22,13 @@ import (
 	"daunrodo/internal/observability"
 )
 
+const (
+	testURLLinuxARM64 = "https://example.com/linux-arm64"
+	testURLLinuxAMD64 = "https://example.com/linux-amd64"
+	testPathSHA       = "/sha"
+	testPathBin       = "/bin"
+)
+
 type rtFunc func(*http.Request) (*http.Response, error)
 
 func (f rtFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
@@ -37,12 +44,12 @@ func TestParseSHASums(t *testing.T) {
 	}{
 		{
 			name: "valid sums",
-			content: `abc123def456789012345678901234567890123456789012345678901234abcd  yt-dlp_macos
-def456abc789012345678901234567890123456789012345678901234567efgh  yt-dlp_linux`,
+			content: "abc123def456789012345678901234567890123456789012345678901234abcd  yt-dlp_macos\n" +
+				"def456abc789012345678901234567890123456789012345678901234567efgh  " + downloadFileYTdlpLinux,
 			wantLen: 2,
 			wantHash: map[string]string{
-				"yt-dlp_macos": "abc123def456789012345678901234567890123456789012345678901234abcd",
-				"yt-dlp_linux": "def456abc789012345678901234567890123456789012345678901234567efgh",
+				"yt-dlp_macos":         "abc123def456789012345678901234567890123456789012345678901234abcd",
+				downloadFileYTdlpLinux: "def456abc789012345678901234567890123456789012345678901234567efgh",
 			},
 		},
 		{
@@ -115,23 +122,23 @@ func TestGetBinaryPath(t *testing.T) {
 		{
 			name:     "yt-dlp on linux",
 			binary:   BinaryYTdlp,
-			os:       "linux",
+			os:       platformLinux,
 			binsDir:  "/app/bins",
-			wantPath: "/app/bins/yt-dlp",
+			wantPath: "/app/bins/" + string(BinaryYTdlp),
 		},
 		{
 			name:     "yt-dlp on windows",
 			binary:   BinaryYTdlp,
-			os:       "windows",
+			os:       platformWindows,
 			binsDir:  "/app/bins",
-			wantPath: "/app/bins/yt-dlp.exe",
+			wantPath: "/app/bins/" + string(BinaryYTdlp) + ".exe",
 		},
 		{
 			name:     "ffmpeg on darwin",
 			binary:   BinaryFFmpeg,
-			os:       "darwin",
+			os:       platformDarwin,
 			binsDir:  "/usr/local/bins",
-			wantPath: "/usr/local/bins/ffmpeg",
+			wantPath: "/usr/local/bins/" + string(BinaryFFmpeg),
 		},
 	}
 
@@ -159,8 +166,8 @@ func TestGetBinaryPath(t *testing.T) {
 func TestFetchSHASums(t *testing.T) {
 	t.Parallel()
 
-	shaContent := `abc123def456789012345678901234567890123456789012345678901234abcd  yt-dlp_macos
-def456abc789012345678901234567890123456789012345678901234567efgh  yt-dlp_linux`
+	shaContent := "abc123def456789012345678901234567890123456789012345678901234abcd  yt-dlp_macos\n" +
+		"def456abc789012345678901234567890123456789012345678901234567efgh  " + downloadFileYTdlpLinux
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -272,31 +279,31 @@ func TestSelectURL(t *testing.T) {
 	}{
 		{
 			name:     "linux/arm64 with config",
-			platform: Platform{OS: "linux", Arch: "arm64"},
-			linuxARM: "https://example.com/linux-arm64",
-			linuxAMD: "https://example.com/linux-amd64",
-			want:     "https://example.com/linux-arm64",
+			platform: Platform{OS: platformLinux, Arch: archARM64},
+			linuxARM: testURLLinuxARM64,
+			linuxAMD: testURLLinuxAMD64,
+			want:     testURLLinuxARM64,
 		},
 		{
 			name:     "linux/amd64 with config",
-			platform: Platform{OS: "linux", Arch: "amd64"},
-			linuxARM: "https://example.com/linux-arm64",
-			linuxAMD: "https://example.com/linux-amd64",
-			want:     "https://example.com/linux-amd64",
+			platform: Platform{OS: platformLinux, Arch: archAMD64},
+			linuxARM: testURLLinuxARM64,
+			linuxAMD: testURLLinuxAMD64,
+			want:     testURLLinuxAMD64,
 		},
 		{
 			name:     "unsupported platform falls back to amd64",
 			platform: Platform{OS: "freebsd", Arch: "arm"},
-			linuxARM: "https://example.com/linux-arm64",
-			linuxAMD: "https://example.com/linux-amd64",
-			want:     "https://example.com/linux-amd64",
+			linuxARM: testURLLinuxARM64,
+			linuxAMD: testURLLinuxAMD64,
+			want:     testURLLinuxAMD64,
 		},
 		{
 			name:     "darwin falls back to amd64",
-			platform: Platform{OS: "darwin", Arch: "arm64"},
+			platform: Platform{OS: platformDarwin, Arch: archARM64},
 			linuxARM: "",
-			linuxAMD: "https://example.com/linux-amd64",
-			want:     "https://example.com/linux-amd64",
+			linuxAMD: testURLLinuxAMD64,
+			want:     testURLLinuxAMD64,
 		},
 	}
 
@@ -329,56 +336,56 @@ func TestGetDownloadFilename(t *testing.T) {
 		{
 			name:     "yt-dlp linux arm64",
 			binary:   BinaryYTdlp,
-			platform: Platform{OS: "linux", Arch: "arm64"},
-			want:     "yt-dlp_linux_aarch64",
+			platform: Platform{OS: platformLinux, Arch: archARM64},
+			want:     downloadFileYTdlpLinuxAarch64,
 		},
 		{
 			name:     "yt-dlp linux amd64",
 			binary:   BinaryYTdlp,
-			platform: Platform{OS: "linux", Arch: "amd64"},
-			want:     "yt-dlp_linux",
+			platform: Platform{OS: platformLinux, Arch: archAMD64},
+			want:     downloadFileYTdlpLinux,
 		},
 		{
 			name:     "yt-dlp darwin",
 			binary:   BinaryYTdlp,
-			platform: Platform{OS: "darwin", Arch: "arm64"},
-			want:     "yt-dlp",
+			platform: Platform{OS: platformDarwin, Arch: archARM64},
+			want:     string(BinaryYTdlp),
 		},
 		{
 			name:     "gallery-dl linux",
 			binary:   BinaryGalleryDL,
-			platform: Platform{OS: "linux", Arch: "amd64"},
-			want:     "gallery-dl_linux_amd64",
+			platform: Platform{OS: platformLinux, Arch: archAMD64},
+			want:     downloadFileGalleryDLLinuxAMD64,
 		},
 		{
 			name:     "gallery-dl windows",
 			binary:   BinaryGalleryDL,
-			platform: Platform{OS: "windows", Arch: "amd64"},
-			want:     "gallery-dl",
+			platform: Platform{OS: platformWindows, Arch: archAMD64},
+			want:     string(BinaryGalleryDL),
 		},
 		{
 			name:     "ffmpeg linux arm64",
 			binary:   BinaryFFmpeg,
-			platform: Platform{OS: "linux", Arch: "arm64"},
-			want:     "ffmpeg-master-latest-linuxarm64-gpl.tar.xz",
+			platform: Platform{OS: platformLinux, Arch: archARM64},
+			want:     downloadFileFFmpegLinuxARM64,
 		},
 		{
 			name:     "ffmpeg linux amd64",
 			binary:   BinaryFFmpeg,
-			platform: Platform{OS: "linux", Arch: "amd64"},
-			want:     "ffmpeg-master-latest-linux64-gpl.tar.xz",
+			platform: Platform{OS: platformLinux, Arch: archAMD64},
+			want:     downloadFileFFmpegLinuxAMD64,
 		},
 		{
 			name:     "deno linux arm64",
 			binary:   BinaryDeno,
-			platform: Platform{OS: "linux", Arch: "arm64"},
-			want:     "deno-aarch64-unknown-linux-gnu.zip",
+			platform: Platform{OS: platformLinux, Arch: archARM64},
+			want:     downloadFileDenoLinuxARM64,
 		},
 		{
 			name:     "deno linux amd64",
 			binary:   BinaryDeno,
-			platform: Platform{OS: "linux", Arch: "amd64"},
-			want:     "deno-x86_64-unknown-linux-gnu.zip",
+			platform: Platform{OS: platformLinux, Arch: archAMD64},
+			want:     downloadFileDenoLinuxAMD64,
 		},
 	}
 
@@ -405,7 +412,7 @@ func TestBinaryExists(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a test binary file
-	testBinPath := filepath.Join(tmpDir, "yt-dlp")
+	testBinPath := filepath.Join(tmpDir, string(BinaryYTdlp))
 	if err := os.WriteFile(testBinPath, []byte("binary content"), 0o755); err != nil {
 		t.Fatalf("failed to create test binary: %v", err)
 	}
@@ -417,7 +424,7 @@ func TestBinaryExists(t *testing.T) {
 		},
 	}
 	mgr := New(log, cfg, nil)
-	mgr.platform.OS = "linux"
+	mgr.platform.OS = platformLinux
 
 	// Test existing binary
 	if !mgr.isBinaryExists(BinaryYTdlp) {
@@ -436,16 +443,16 @@ func TestFindUpdates(t *testing.T) {
 	log := slog.Default()
 	cfg := &config.Config{}
 	mgr := New(log, cfg, nil)
-	mgr.platform = Platform{OS: "linux", Arch: "amd64"}
+	mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
 
 	// Set up saved sums (old)
 	mgr.savedSums = map[string]string{
-		"yt-dlp_linux": "oldhash1234567890123456789012345678901234567890123456789012",
+		downloadFileYTdlpLinux: "oldhash1234567890123456789012345678901234567890123456789012",
 	}
 
 	// Set up fetched sums (new)
 	mgr.shaSums = map[string]string{
-		"yt-dlp_linux": "newhash1234567890123456789012345678901234567890123456789012",
+		downloadFileYTdlpLinux: "newhash1234567890123456789012345678901234567890123456789012",
 	}
 
 	updates := mgr.findUpdates()
@@ -461,16 +468,16 @@ func TestFindUpdates_NoChanges(t *testing.T) {
 	log := slog.Default()
 	cfg := &config.Config{}
 	mgr := New(log, cfg, nil)
-	mgr.platform = Platform{OS: "linux", Arch: "amd64"}
+	mgr.platform = Platform{OS: platformLinux, Arch: archAMD64}
 
 	hash := "samehash1234567890123456789012345678901234567890123456789012"
 
 	mgr.savedSums = map[string]string{
-		"yt-dlp_linux": hash,
+		downloadFileYTdlpLinux: hash,
 	}
 
 	mgr.shaSums = map[string]string{
-		"yt-dlp_linux": hash,
+		downloadFileYTdlpLinux: hash,
 	}
 
 	updates := mgr.findUpdates()
@@ -594,7 +601,7 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		const (
-			filename      = "yt-dlp_linux"
+			filename      = downloadFileYTdlpLinux
 			binaryContent = "updated binary"
 		)
 
@@ -603,9 +610,9 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case "/sha":
+			case testPathSHA:
 				fmt.Fprintf(w, "%s  %s\n", newHash, filename)
-			case "/bin":
+			case testPathBin:
 				_, _ = w.Write([]byte(binaryContent))
 			default:
 				http.NotFound(w, r)
@@ -616,8 +623,8 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 		cfg := &config.Config{
 			DepManager: config.DepManager{
 				BinsDir:            tmpDir,
-				YTdlpSHA256SumsURL: server.URL + "/sha",
-				YTdlpLinuxAMD64:    server.URL + "/bin",
+				YTdlpSHA256SumsURL: server.URL + testPathSHA,
+				YTdlpLinuxAMD64:    server.URL + testPathBin,
 			},
 		}
 
@@ -628,7 +635,7 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 
 		mgr.checkAndUpdate(t.Context())
 
-		binPath := filepath.Join(tmpDir, "yt-dlp")
+		binPath := filepath.Join(tmpDir, string(BinaryYTdlp))
 
 		data, err := os.ReadFile(binPath)
 		if err != nil {
@@ -644,7 +651,7 @@ func TestCheckAndUpdate_DownloadsNewBinary(t *testing.T) {
 		}
 
 		gotMetrics := binaryDownloadMetrics(t, metrics)
-		if got := gotMetrics["yt-dlp|update"]; got != 1 {
+		if got := gotMetrics[string(BinaryYTdlp)+"|update"]; got != 1 {
 			t.Fatalf("update metric mismatch: got %v, want 1", got)
 		}
 	})
@@ -655,7 +662,7 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		const (
-			filename      = "yt-dlp_linux"
+			filename      = downloadFileYTdlpLinux
 			binaryContent = "ticker binary"
 		)
 
@@ -666,8 +673,8 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 			DepManager: config.DepManager{
 				BinsDir:            tmpDir,
 				UpdateInterval:     time.Second,
-				YTdlpSHA256SumsURL: "/sha",
-				YTdlpLinuxAMD64:    "/bin",
+				YTdlpSHA256SumsURL: testPathSHA,
+				YTdlpLinuxAMD64:    testPathBin,
 			},
 		}
 
@@ -678,11 +685,11 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 		mgr.client = &http.Client{
 			Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
 				switch r.URL.Path {
-				case "/sha":
+				case testPathSHA:
 					body := fmt.Sprintf("%s  %s\n", newHash, filename)
 
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil //nolint:lll
-				case "/bin":
+				case testPathBin:
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(binaryContent)), Header: make(http.Header), Request: r}, nil //nolint:lll
 				default:
 					return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("nf")), Header: make(http.Header), Request: r}, nil //nolint:lll
@@ -698,7 +705,7 @@ func TestStartUpdateChecker_UsesTicker(t *testing.T) {
 		time.Sleep(cfg.DepManager.UpdateInterval)
 		synctest.Wait()
 
-		data, err := os.ReadFile(filepath.Join(tmpDir, "yt-dlp"))
+		data, err := os.ReadFile(filepath.Join(tmpDir, string(BinaryYTdlp)))
 		if err != nil {
 			t.Fatalf("expected binary to be downloaded by ticker: %v", err)
 		}
@@ -734,7 +741,7 @@ func TestInstallAll_RecordsInstallMetric(t *testing.T) {
 		},
 	}
 
-	for _, name := range []string{"ffmpeg", "deno", "gallery-dl"} {
+	for _, name := range []string{string(BinaryFFmpeg), string(BinaryDeno), string(BinaryGalleryDL)} {
 		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0o755); err != nil {
 			t.Fatalf("write existing binary %s: %v", name, err)
 		}
@@ -749,7 +756,7 @@ func TestInstallAll_RecordsInstallMetric(t *testing.T) {
 	}
 
 	gotMetrics := binaryDownloadMetrics(t, metrics)
-	if got := gotMetrics["yt-dlp|install"]; got != 1 {
+	if got := gotMetrics[string(BinaryYTdlp)+"|install"]; got != 1 {
 		t.Fatalf("install metric mismatch: got %v, want 1", got)
 	}
 }
@@ -759,7 +766,12 @@ func TestInstallAll_SkipExistingBinaryDoesNotRecordMetric(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	for _, name := range []string{"ffmpeg", "deno", "gallery-dl", "yt-dlp"} {
+	for _, name := range []string{
+		string(BinaryFFmpeg),
+		string(BinaryDeno),
+		string(BinaryGalleryDL),
+		string(BinaryYTdlp),
+	} {
 		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0o755); err != nil {
 			t.Fatalf("write existing binary %s: %v", name, err)
 		}
@@ -791,8 +803,8 @@ func TestInstallAll_ArchiveBinaryRecordsManagedBinaryOnly(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	archive, err := createZipArchive(map[string]string{
-		"ffmpeg":  "ffmpeg binary",
-		"ffprobe": "ffprobe binary",
+		string(BinaryFFmpeg):  "ffmpeg binary",
+		string(BinaryFFprobe): "ffprobe binary",
 	})
 	if err != nil {
 		t.Fatalf("create zip archive: %v", err)
@@ -817,7 +829,7 @@ func TestInstallAll_ArchiveBinaryRecordsManagedBinaryOnly(t *testing.T) {
 		},
 	}
 
-	for _, name := range []string{"deno", "gallery-dl", "yt-dlp"} {
+	for _, name := range []string{string(BinaryDeno), string(BinaryGalleryDL), string(BinaryYTdlp)} {
 		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0o755); err != nil {
 			t.Fatalf("write existing binary %s: %v", name, err)
 		}

@@ -49,6 +49,18 @@ const (
 	archAMD64       = "amd64"
 )
 
+// Remote download artifact filenames (as listed in SHA256SUMS / release assets).
+const (
+	downloadFileYTdlpLinux          = "yt-dlp_linux"
+	downloadFileYTdlpLinuxAarch64   = "yt-dlp_linux_aarch64"
+	downloadFileGalleryDLLinuxAMD64 = "gallery-dl_linux_amd64"
+	downloadFileGalleryDLLinuxARM64 = "gallery-dl_linux_arm64"
+	downloadFileFFmpegLinuxAMD64    = "ffmpeg-master-latest-linux64-gpl.tar.xz"
+	downloadFileFFmpegLinuxARM64    = "ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
+	downloadFileDenoLinuxAMD64      = "deno-x86_64-unknown-linux-gnu.zip"
+	downloadFileDenoLinuxARM64      = "deno-aarch64-unknown-linux-gnu.zip"
+)
+
 // Internal constants for binary management.
 const (
 	// downloadTimeout is the HTTP client timeout for downloading binaries.
@@ -555,36 +567,36 @@ func (m *Manager) getDownloadFilename(name BinaryName) string {
 	case BinaryYTdlp:
 		switch {
 		case m.platform.OS == platformLinux && m.platform.Arch == archARM64:
-			return "yt-dlp_linux_aarch64"
+			return downloadFileYTdlpLinuxAarch64
 		case m.platform.OS == platformLinux:
-			return "yt-dlp_linux"
+			return downloadFileYTdlpLinux
 		default:
-			return "yt-dlp"
+			return string(BinaryYTdlp)
 		}
 	case BinaryGalleryDL:
 		switch {
 		case m.platform.OS == platformLinux && m.platform.Arch == archARM64:
-			return "gallery-dl_linux_arm64"
+			return downloadFileGalleryDLLinuxARM64
 		case m.platform.OS == platformLinux:
-			return "gallery-dl_linux_amd64"
+			return downloadFileGalleryDLLinuxAMD64
 		default:
-			return "gallery-dl"
+			return string(BinaryGalleryDL)
 		}
 	case BinaryFFmpeg:
 		switch {
 		case m.platform.OS == platformLinux && m.platform.Arch == archARM64:
-			return "ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
+			return downloadFileFFmpegLinuxARM64
 		case m.platform.OS == platformLinux:
-			return "ffmpeg-master-latest-linux64-gpl.tar.xz"
+			return downloadFileFFmpegLinuxAMD64
 		default:
-			return "ffmpeg"
+			return string(BinaryFFmpeg)
 		}
 	case BinaryDeno:
 		switch {
 		case m.platform.OS == platformLinux && m.platform.Arch == archARM64:
-			return "deno-aarch64-unknown-linux-gnu.zip"
+			return downloadFileDenoLinuxARM64
 		case m.platform.OS == platformLinux && m.platform.Arch == archAMD64:
-			return "deno-x86_64-unknown-linux-gnu.zip"
+			return downloadFileDenoLinuxAMD64
 		}
 	}
 
