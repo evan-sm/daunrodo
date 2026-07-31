@@ -54,11 +54,16 @@ func main() {
 		log.InfoContext(ctx, "proxy manager initialized", slog.Int("proxy_count", len(cfg.Proxy.Proxies)))
 	}
 
-	dl := downloader.NewYTdlp(log, cfg, depMgr, proxyMgr, metrics)
+	yt := downloader.NewYTdlp(log, cfg, depMgr, proxyMgr, metrics)
+	native := downloader.NewNative(log, cfg, depMgr, proxyMgr, metrics)
+	jobDownloader := downloader.NewRouter(yt, downloader.Rule{
+		Match: downloader.IsInstagramReel,
+		DL:    native,
+	})
 	storer := storage.New(ctx, log, cfg, metrics)
 
 	// Service
-	svc := service.New(cfg, log, dl, storer, metrics)
+	svc := service.New(cfg, log, jobDownloader, storer, metrics)
 
 	// HTTP Server
 	router := httprouter.New(log, cfg, svc, storer, metrics)

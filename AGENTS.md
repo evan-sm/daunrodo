@@ -1,13 +1,11 @@
 # Agent Guide for daunrodo
 
-This repo is a Go 1.25+ self-hosted HTTP API around `yt-dlp` for media downloads.
+This repo is a Go 1.26+ self-hosted HTTP API around `yt-dlp` for media downloads.
 
 ## Quick Commands
 - Test: `go test -tags=integration -v -race -cover ./...`
 - Lint: `golangci-lint run` (or `task lint`)
 - Docker: `docker build -t daunrodo .`, `docker compose up -d`
-
-More details live in `BUILD.md`.
 
 ## Layout
 - `main.go`: application entry point and wiring.
@@ -37,6 +35,8 @@ More details live in `BUILD.md`.
 - `proxymgr.Manager`: proxy rotation with `GetRandomProxy()`, `MarkFailed()`, `MarkSuccess()`, `StartHealthChecker()`.
 - `downloader.YTdlp`: yt-dlp downloader using `exec.Command` directly.
 - `downloader.GalleryDL`: gallery-dl downloader for TikTok image slideshows.
+- `downloader.Router`: URL-based dispatch (Instagram Reels → `Native`, default → `YTdlp`).
+- `downloader.Native`: Instagram Reels via HTML DASH manifest + ffmpeg remux (no cookies).
 
 ## When Changing Behavior
 - Update `README.md` if you add new flags, env vars, or workflow steps.

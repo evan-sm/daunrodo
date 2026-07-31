@@ -8,6 +8,7 @@ Stop screenshoting, just ```daunrodo``` it!
 
 # 🤩 Features
 - [x] 🎨 **Media** supports videos, audios, playlists
+- [x] 📱 **Instagram Reels** native DASH download (no account cookies) via downloader router; other sites use `yt-dlp`
 - [x] 🔄 **Autoinstall** `yt-dlp`, `ffmpeg`, `gallery-dl` binaries are managed automatically with SHA256 verification
 - [x] 🚦 **Queue**. Requested downloads are enqueued, cached, cleaned (TTL) and progress (%, ETA) is tracked
 - [x] 🌐 **Proxy Support**. SOCKS5h proxy rotation with health checking and failure tracking
