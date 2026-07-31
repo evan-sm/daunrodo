@@ -266,7 +266,10 @@ func (d *Native) remux(ctx context.Context, videoPath, audioPath, outPath string
 		"-y",
 		"-i", videoPath,
 		"-i", audioPath,
+		"-map", "0:v:0",
+		"-map", "1:a:0",
 		"-c", "copy",
+		"-movflags", "+faststart",
 		outPath,
 	)
 
